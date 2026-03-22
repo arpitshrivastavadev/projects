@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS}
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+
+police:
+  simulator:
+    device-count: ${SIMULATOR_DEVICE_COUNT:10000}
+    interval-ms: ${SIMULATOR_INTERVAL_MS:1000}
+
+logging:
+  level:
+    root: INFO

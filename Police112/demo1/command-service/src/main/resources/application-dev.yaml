@@ -1,0 +1,11 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+  kafka:
+    bootstrap-servers: localhost:29092
+
+logging:
+  level:
+    root: INFO
+    com.police.iot: DEBUG

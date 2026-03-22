@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: event-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  kafka:
+    consumer:
+      group-id: police-event-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+      acks: all
+
+server:
+  port: 8083
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_MAX_THREADS:200}
+      min-spare: ${SERVER_TOMCAT_MIN_SPARE_THREADS:20}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus,metrics"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: always
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState,redis
+        startup:
+          include: readinessState
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisReadOps:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+      redisWriteOps:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+  retry:
+    instances:
+      redisReadOps:
+        maxAttempts: 3
+        waitDuration: 200ms
+      redisWriteOps:
+        maxAttempts: 3
+        waitDuration: 200ms
+  ratelimiter:
+    instances:
+      redisReadOps:
+        limitForPeriod: 300
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+  bulkhead:
+    instances:
+      redisReadOps:
+        maxConcurrentCalls: 100
+        maxWaitDuration: 0
+      redisWriteOps:
+        maxConcurrentCalls: 100
+        maxWaitDuration: 0

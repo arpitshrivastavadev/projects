@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: sim-service
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  task:
+    execution:
+      pool:
+        core-size: ${POLICE_SIM_EXECUTOR_CORE_SIZE:8}
+        max-size: ${POLICE_SIM_EXECUTOR_MAX_SIZE:16}
+        queue-capacity: ${POLICE_SIM_EXECUTOR_QUEUE_CAPACITY:1000}
+      thread-name-prefix: sim-publisher-
+      shutdown:
+        await-termination: true
+        await-termination-period: 20s
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+      acks: 1 # Faster for simulation
+
+police:
+  simulator:
+    executor:
+      core-size: ${POLICE_SIM_EXECUTOR_CORE_SIZE:8}
+      max-size: ${POLICE_SIM_EXECUTOR_MAX_SIZE:16}
+      queue-capacity: ${POLICE_SIM_EXECUTOR_QUEUE_CAPACITY:1000}
+
+
+server:
+  port: 8084
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_MAX_THREADS:100}
+      min-spare: ${SERVER_TOMCAT_MIN_SPARE_THREADS:10}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:2048}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:50}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus,metrics"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+      show-details: always
+      group:
+        liveness:
+          include: livenessState,ping
+        readiness:
+          include: readinessState
+        startup:
+          include: readinessState
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      kafkaPublisher:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 20s
+  retry:
+    instances:
+      kafkaPublisher:
+        maxAttempts: 3
+        waitDuration: 100ms
+  ratelimiter:
+    instances:
+      kafkaPublisher:
+        limitForPeriod: ${POLICE_SIM_RATE_LIMIT_PER_SECOND:1500}
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+  bulkhead:
+    instances:
+      kafkaPublisher:
+        maxConcurrentCalls: ${POLICE_SIM_BULKHEAD_MAX_CONCURRENT:200}
+        maxWaitDuration: 0

@@ -1,0 +1,6 @@
+rootProject.name = 'police-iot-platform'
+include 'common'
+include 'device-service'
+include 'sim-service'
+include 'command-service'
+include 'event-service'
