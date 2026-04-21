@@ -37,8 +37,7 @@ public class IdempotencyRecord {
     @Column(name = "RESPONSE_STATUS")
     private Integer responseStatus;
 
-    @Lob
-    @Column(name = "RESPONSE_BODY")
+    @Column(name = "RESPONSE_BODY", columnDefinition = "TEXT")
     private String responseBody;
 
     @Column(name = "CREATED_AT", nullable = false)
