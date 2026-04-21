@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -27,6 +28,8 @@ public class TelemetrySnapshotService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final MeterRegistry meterRegistry;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    public record SnapshotStoreResult(boolean updated, Instant existingTimestamp) {}
 
     @CircuitBreaker(name = "redisReadOps", fallbackMethod = "getDeviceTelemetryFallback")
     @Retry(name = "redisReadOps", fallbackMethod = "getDeviceTelemetryFallback")
@@ -65,6 +68,26 @@ public class TelemetrySnapshotService {
         redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
     }
 
+    @CircuitBreaker(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
+    @Retry(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
+    @Bulkhead(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
+    public SnapshotStoreResult storeTelemetryIfNewer(PoliceTelemetry telemetry) {
+        String snapshotKey = REDIS_KEY_PREFIX + telemetry.getDeviceId();
+        PoliceTelemetry current = toTelemetry(redisTemplate.opsForValue().get(snapshotKey));
+        Instant currentTimestamp = current == null ? null : current.getTimestamp();
+        Instant incomingTimestamp = telemetry.getTimestamp();
+
+        StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
+        if (staleReason != null) {
+            meterRegistry.counter("event.snapshot.stale.skipped", "reason", staleReason.metricTag).increment();
+            return new SnapshotStoreResult(false, currentTimestamp);
+        }
+
+        redisTemplate.opsForValue().set(snapshotKey, telemetry);
+        redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
+        return new SnapshotStoreResult(true, currentTimestamp);
+    }
+
     public PoliceTelemetry getDeviceTelemetryFallback(String deviceId, Throwable throwable) {
         incrementFailure("get_device", throwable);
         log.warn("Returning fallback for device telemetry on {}", deviceId, throwable);
@@ -74,6 +97,12 @@ public class TelemetrySnapshotService {
     public void storeTelemetryFallback(PoliceTelemetry telemetry, Throwable throwable) {
         incrementFailure("store", throwable);
         log.error("Unable to store telemetry snapshot for {}", telemetry.getDeviceId(), throwable);
+    }
+
+    public SnapshotStoreResult storeTelemetryIfNewerFallback(PoliceTelemetry telemetry, Throwable throwable) {
+        incrementFailure("store_if_newer", throwable);
+        log.error("Unable to store telemetry snapshot with ordering check for {}", telemetry.getDeviceId(), throwable);
+        throw new RuntimeException("Ordered telemetry snapshot write failed", throwable);
     }
 
     public List<PoliceTelemetry> getAllTelemetryFallback(Throwable throwable) {
@@ -103,6 +132,34 @@ public class TelemetrySnapshotService {
         } catch (IllegalArgumentException ex) {
             log.warn("Unable to convert Redis value to PoliceTelemetry: {}", value.getClass().getName());
             return null;
+        }
+    }
+
+    private StaleReason staleReason(Instant incoming, Instant current) {
+        if (current == null) {
+            return null;
+        }
+        if (incoming == null) {
+            return StaleReason.MISSING_INCOMING_TIMESTAMP;
+        }
+        if (incoming.equals(current)) {
+            return StaleReason.EQUAL;
+        }
+        if (incoming.isBefore(current)) {
+            return StaleReason.OLDER;
+        }
+        return null;
+    }
+
+    private enum StaleReason {
+        OLDER("older"),
+        EQUAL("equal"),
+        MISSING_INCOMING_TIMESTAMP("missing_incoming_timestamp");
+
+        private final String metricTag;
+
+        StaleReason(String metricTag) {
+            this.metricTag = metricTag;
         }
     }
 }

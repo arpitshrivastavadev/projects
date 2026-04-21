@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
 import com.police.iot.event.service.TelemetryEventIdempotencyService;
 import com.police.iot.event.service.TelemetrySnapshotService;
+import com.police.iot.event.service.TelemetrySnapshotService.SnapshotStoreResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -65,8 +66,17 @@ public class TelemetryConsumer {
                     telemetry.getDeviceId(), topic, record.partition(), record.offset(), correlationId);
 
             try {
-                telemetrySnapshotService.storeTelemetry(telemetry);
-                meterRegistry.counter("event.kafka.consume.success", "topic", topic).increment();
+                SnapshotStoreResult storeResult = telemetrySnapshotService.storeTelemetryIfNewer(telemetry);
+                if (storeResult.updated()) {
+                    meterRegistry.counter("event.kafka.consume.success", "topic", topic).increment();
+                } else {
+                    log.info("Skipping stale telemetry update. deviceId={} tenantId={} incomingTimestamp={} currentTimestamp={} correlationId={}",
+                            telemetry.getDeviceId(),
+                            telemetry.getTenantId(),
+                            telemetry.getTimestamp(),
+                            storeResult.existingTimestamp(),
+                            correlationId);
+                }
             } catch (Exception processingError) {
                 idempotencyService.release(idempotencyKey);
                 throw processingError;
