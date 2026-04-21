@@ -118,7 +118,7 @@ class DeviceWriteIdempotencyIntegrationTest {
         JsonNode firstJson = objectMapper.readTree(firstResult.getResponse().getContentAsString());
         JsonNode secondJson = objectMapper.readTree(secondResult.getResponse().getContentAsString());
 
-        assertThat(secondJson.get("id").asText()).isEqualTo(firstJson.get("id").asText());
+        assertThat(secondJson).isEqualTo(firstJson);
         assertThat(officerRepository.count()).isEqualTo(1L);
         assertThat(idempotencyRecordRepository.count()).isEqualTo(1L);
     }
@@ -158,6 +158,7 @@ class DeviceWriteIdempotencyIntegrationTest {
                 .andExpect(status().isConflict());
 
         assertThat(patrolVehicleRepository.count()).isEqualTo(1L);
+        assertThat(idempotencyRecordRepository.count()).isEqualTo(1L);
     }
 
     @Test
