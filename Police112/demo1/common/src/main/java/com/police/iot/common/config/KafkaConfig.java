@@ -15,4 +15,20 @@ public class KafkaConfig {
                 .replicas(1)
                 .build();
     }
+
+    @Bean
+    public NewTopic telemetryRetryTopic() {
+        return TopicBuilder.name("police-telemetry-retry")
+                .partitions(50)
+                .replicas(1)
+                .build();
+    }
+
+    @Bean
+    public NewTopic telemetryDlqTopic() {
+        return TopicBuilder.name("police-telemetry-dlq")
+                .partitions(50)
+                .replicas(1)
+                .build();
+    }
 }

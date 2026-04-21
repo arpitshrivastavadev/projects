@@ -9,6 +9,7 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -79,3 +80,17 @@ resilience4j:
       redisWriteOps:
         maxConcurrentCalls: 100
         maxWaitDuration: 0
+
+police:
+  kafka:
+    topics:
+      telemetry: police-telemetry
+      telemetry-retry: police-telemetry-retry
+      telemetry-dlq: police-telemetry-dlq
+    retry:
+      main:
+        attempts: 2
+        backoff-ms: 1000
+      retry-topic:
+        attempts: 2
+        backoff-ms: 2000
