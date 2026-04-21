@@ -11,11 +11,14 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,5 +105,100 @@ class TelemetrySnapshotServiceTest {
         PoliceTelemetry result = service.getDeviceTelemetry("device-1");
 
         assertNull(result);
+    }
+
+    @Test
+    void storeTelemetryIfNewerUpdatesSnapshotWhenIncomingTimestampIsNewer() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        PoliceTelemetry current = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:15:30Z"))
+                .build();
+        PoliceTelemetry incoming = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:16:30Z"))
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get("twin:snapshot:device-1")).thenReturn(current);
+
+        TelemetrySnapshotService.SnapshotStoreResult result = service.storeTelemetryIfNewer(incoming);
+
+        assertTrue(result.updated());
+        verify(valueOperations).set("twin:snapshot:device-1", incoming);
+        verify(setOperations).add("twin:snapshot:devices", "device-1");
+    }
+
+    @Test
+    void storeTelemetryIfNewerSkipsUpdateWhenIncomingTimestampIsOlder() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        PoliceTelemetry current = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:16:30Z"))
+                .build();
+        PoliceTelemetry incoming = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:15:30Z"))
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("twin:snapshot:device-1")).thenReturn(current);
+
+        TelemetrySnapshotService.SnapshotStoreResult result = service.storeTelemetryIfNewer(incoming);
+
+        assertFalse(result.updated());
+        assertEquals(Instant.parse("2026-04-21T10:16:30Z"), result.existingTimestamp());
+        assertEquals(1.0, meterRegistry.get("event.snapshot.stale.skipped").counter().count());
+    }
+
+    @Test
+    void storeTelemetryIfNewerSkipsUpdateWhenIncomingTimestampIsEqual() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        PoliceTelemetry current = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:16:30Z"))
+                .build();
+        PoliceTelemetry incoming = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:16:30Z"))
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("twin:snapshot:device-1")).thenReturn(current);
+
+        TelemetrySnapshotService.SnapshotStoreResult result = service.storeTelemetryIfNewer(incoming);
+
+        assertFalse(result.updated());
+        assertEquals(1.0, meterRegistry.get("event.snapshot.stale.skipped").tag("reason", "equal").counter().count());
+    }
+
+    @Test
+    void storeTelemetryIfNewerStoresSnapshotWhenCurrentSnapshotMissing() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        PoliceTelemetry incoming = PoliceTelemetry.builder()
+                .deviceId("device-1")
+                .tenantId("NYPD")
+                .timestamp(Instant.parse("2026-04-21T10:16:30Z"))
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        when(valueOperations.get("twin:snapshot:device-1")).thenReturn(null);
+
+        TelemetrySnapshotService.SnapshotStoreResult result = service.storeTelemetryIfNewer(incoming);
+
+        assertTrue(result.updated());
+        verify(valueOperations).set("twin:snapshot:device-1", incoming);
     }
 }
