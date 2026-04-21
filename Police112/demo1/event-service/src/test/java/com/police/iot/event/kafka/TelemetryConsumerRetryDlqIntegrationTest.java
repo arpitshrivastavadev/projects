@@ -3,6 +3,7 @@ package com.police.iot.event.kafka;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
 import com.police.iot.event.EventServiceApplication;
+import com.police.iot.event.service.TelemetryEventIdempotencyService;
 import com.police.iot.event.service.TelemetrySnapshotService;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -33,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -68,6 +70,9 @@ class TelemetryConsumerRetryDlqIntegrationTest {
     @MockBean
     private TelemetrySnapshotService telemetrySnapshotService;
 
+    @MockBean
+    private TelemetryEventIdempotencyService idempotencyService;
+
     @AfterEach
     void tearDown() {
         clearInvocations(telemetrySnapshotService);
@@ -75,6 +80,9 @@ class TelemetryConsumerRetryDlqIntegrationTest {
 
     @Test
     void transientFailureIsRecoveredViaRetryTopic() throws Exception {
+        when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("test-key");
+        when(idempotencyService.claim("test-key")).thenReturn(true);
+
         Map<String, Integer> attemptsByDevice = new ConcurrentHashMap<>();
         doAnswer(invocation -> {
             PoliceTelemetry telemetry = invocation.getArgument(0);
@@ -95,6 +103,8 @@ class TelemetryConsumerRetryDlqIntegrationTest {
 
     @Test
     void poisonMessageIsRoutedToDlqAfterRetryExhaustion() throws Exception {
+        when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("test-key");
+        when(idempotencyService.claim("test-key")).thenReturn(true);
         doThrow(new RuntimeException("always failing")).when(telemetrySnapshotService).storeTelemetry(any(PoliceTelemetry.class));
 
         sendTelemetry("poison-device", "corr-poison");
