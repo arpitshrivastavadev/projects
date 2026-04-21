@@ -82,6 +82,9 @@ resilience4j:
         maxWaitDuration: 0
 
 police:
+  event:
+    idempotency:
+      ttl: ${POLICE_EVENT_IDEMPOTENCY_TTL:PT24H}
   kafka:
     topics:
       telemetry: police-telemetry
