@@ -4,11 +4,12 @@ import com.police.iot.common.security.TenantFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
@@ -22,11 +23,13 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .httpBasic(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/dashboard.html", "/index.html", "/error", "/favicon.ico").permitAll()
-                        .requestMatchers("/api/v1/police/**", "/actuator/**", "/livez", "/readyz").permitAll()
+                        .requestMatchers("/actuator/**", "/livez", "/readyz").permitAll()
+                        .requestMatchers("/api/v1/police/**").authenticated()
                         .anyRequest().authenticated())
-                .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterAfter(tenantFilter, BasicAuthenticationFilter.class);
 
         return http.build();
     }
