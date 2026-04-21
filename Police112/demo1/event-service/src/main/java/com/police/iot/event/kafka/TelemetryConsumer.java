@@ -2,6 +2,7 @@ package com.police.iot.event.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
+import com.police.iot.event.service.TelemetryEventIdempotencyService;
 import com.police.iot.event.service.TelemetrySnapshotService;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class TelemetryConsumer {
 
     private final ObjectMapper objectMapper;
     private final TelemetrySnapshotService telemetrySnapshotService;
+    private final TelemetryEventIdempotencyService idempotencyService;
     private final MeterRegistry meterRegistry;
 
     @KafkaListener(
@@ -46,13 +48,29 @@ public class TelemetryConsumer {
     private void processRecord(ConsumerRecord<String, String> record, String topic) {
         String message = record.value();
         String correlationId = extractCorrelationId(record);
+        String idempotencyKey = null;
+
         try {
             PoliceTelemetry telemetry = objectMapper.readValue(message, PoliceTelemetry.class);
+            idempotencyKey = idempotencyService.buildIdempotencyKey(telemetry);
+
+            if (!idempotencyService.claim(idempotencyKey)) {
+                meterRegistry.counter("event.kafka.consume.duplicates.skipped", "topic", topic).increment();
+                log.info("Skipping duplicate telemetry event. deviceId={} tenantId={} idempotencyKey={} correlationId={}",
+                        telemetry.getDeviceId(), telemetry.getTenantId(), idempotencyKey, correlationId);
+                return;
+            }
+
             log.info("Received telemetry for device={} topic={} partition={} offset={} correlationId={}",
                     telemetry.getDeviceId(), topic, record.partition(), record.offset(), correlationId);
 
-            telemetrySnapshotService.storeTelemetry(telemetry);
-            meterRegistry.counter("event.kafka.consume.success", "topic", topic).increment();
+            try {
+                telemetrySnapshotService.storeTelemetry(telemetry);
+                meterRegistry.counter("event.kafka.consume.success", "topic", topic).increment();
+            } catch (Exception processingError) {
+                idempotencyService.release(idempotencyKey);
+                throw processingError;
+            }
 
             if ("SOS".equalsIgnoreCase(telemetry.getStatus())) {
                 log.warn("🚨 EMERGENCY: SOS received from Device: {} (Officer: {})",
@@ -66,8 +84,8 @@ public class TelemetryConsumer {
 
         } catch (Exception e) {
             meterRegistry.counter("event.kafka.consume.failures", "topic", topic).increment();
-            log.error("Failed to process telemetry message. topic={} partition={} offset={} correlationId={} payload={}",
-                    topic, record.partition(), record.offset(), correlationId, message, e);
+            log.error("Failed to process telemetry message. topic={} partition={} offset={} correlationId={} idempotencyKey={} payload={}",
+                    topic, record.partition(), record.offset(), correlationId, idempotencyKey, message, e);
             throw new RuntimeException("Telemetry processing failed", e);
         }
     }

@@ -9,6 +9,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PoliceTelemetry implements Serializable {
+    private String eventId;
     private String deviceId;
     private String tenantId;
     private Instant timestamp;
