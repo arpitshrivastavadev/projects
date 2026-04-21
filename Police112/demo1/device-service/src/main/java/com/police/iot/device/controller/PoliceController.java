@@ -4,6 +4,7 @@ import com.police.iot.common.model.Incident;
 import com.police.iot.common.model.Officer;
 import com.police.iot.common.model.PatrolVehicle;
 import com.police.iot.common.security.TenantContext;
+import com.police.iot.device.idempotency.IdempotentWrite;
 import com.police.iot.device.repository.IncidentRepository;
 import com.police.iot.device.repository.OfficerRepository;
 import com.police.iot.device.repository.PatrolVehicleRepository;
@@ -31,6 +32,7 @@ public class PoliceController {
     }
 
     @PostMapping("/officers")
+    @IdempotentWrite
     public Officer createOfficer(@RequestBody Officer officer) {
         officer.setTenantId(TenantContext.getTenantId());
         return officerRepository.save(officer);
@@ -42,6 +44,7 @@ public class PoliceController {
     }
 
     @PostMapping("/vehicles")
+    @IdempotentWrite
     public PatrolVehicle createVehicle(@RequestBody PatrolVehicle vehicle) {
         vehicle.setTenantId(TenantContext.getTenantId());
         return vehicleRepository.save(vehicle);
