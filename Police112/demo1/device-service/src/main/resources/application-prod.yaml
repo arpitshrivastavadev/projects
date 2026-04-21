@@ -19,3 +19,9 @@ logging:
     com.police.iot: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n" # In real prod, use JSON formatter
+
+app:
+  security:
+    jwt:
+      dev:
+        enabled: false

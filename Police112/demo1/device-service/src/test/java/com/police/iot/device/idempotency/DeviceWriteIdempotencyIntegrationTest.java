@@ -5,12 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.device.repository.IdempotencyRecordRepository;
 import com.police.iot.device.repository.OfficerRepository;
 import com.police.iot.device.repository.PatrolVehicleRepository;
+import com.police.iot.device.testutil.JwtTestTokenFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -19,7 +19,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -33,9 +33,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.flyway.enabled=true"
+        "spring.flyway.enabled=true",
+        "app.security.jwt.dev.enabled=true",
+        "app.security.jwt.dev.issuer=test-device-service",
+        "app.security.jwt.dev.secret=test-device-service-secret-1234567890"
 })
 class DeviceWriteIdempotencyIntegrationTest {
+
+    private static final String ISSUER = "test-device-service";
+    private static final String SECRET = "test-device-service-secret-1234567890";
 
     @Autowired
     private MockMvc mockMvc;
@@ -74,7 +80,7 @@ class DeviceWriteIdempotencyIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(body)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "idem-officer-1")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tenantId").value("tenant-a"));
 
@@ -97,7 +103,7 @@ class DeviceWriteIdempotencyIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(body)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "idem-officer-2")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -105,7 +111,7 @@ class DeviceWriteIdempotencyIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(body)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "idem-officer-2")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -141,14 +147,14 @@ class DeviceWriteIdempotencyIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(firstBody)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "idem-vehicle-1")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/police/vehicles")
                         .contentType(APPLICATION_JSON)
                         .content(secondBody)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "idem-vehicle-1")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isConflict());
 
         assertThat(patrolVehicleRepository.count()).isEqualTo(1L);
@@ -178,14 +184,14 @@ class DeviceWriteIdempotencyIntegrationTest {
                         .contentType(APPLICATION_JSON)
                         .content(tenantABody)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "shared-key")
-                        .with(authentication(authWithTenant("tenant-a"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-a")))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/police/officers")
                         .contentType(APPLICATION_JSON)
                         .content(tenantBBody)
                         .header(IdempotencyAspect.IDEMPOTENCY_HEADER, "shared-key")
-                        .with(authentication(authWithTenant("tenant-b"))))
+                        .header("Authorization", "Bearer " + tokenWithTenant("tenant-b")))
                 .andExpect(status().isOk());
 
         assertThat(officerRepository.count()).isEqualTo(2L);
@@ -210,10 +216,13 @@ class DeviceWriteIdempotencyIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private TestingAuthenticationToken authWithTenant(String tenantId) {
-        TestingAuthenticationToken authentication =
-                new TestingAuthenticationToken(Map.of("tenant_id", tenantId), null, "ROLE_USER");
-        authentication.setAuthenticated(true);
-        return authentication;
+    @Test
+    void openEndpointRemainsAccessibleWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+    }
+
+    private String tokenWithTenant(String tenantId) {
+        return JwtTestTokenFactory.createHs256Token(ISSUER, SECRET, Map.of("tenant_id", tenantId));
     }
 }
