@@ -17,3 +17,11 @@ logging:
   level:
     root: INFO
     com.police.iot: DEBUG
+
+app:
+  security:
+    jwt:
+      dev:
+        enabled: true
+        issuer: police-iot-device-local
+        secret: local-device-service-jwt-signing-secret-32b
