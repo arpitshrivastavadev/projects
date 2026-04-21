@@ -10,7 +10,7 @@ spring:
     password: ${DB_PASSWORD:ecp_password}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
 
 logging:
