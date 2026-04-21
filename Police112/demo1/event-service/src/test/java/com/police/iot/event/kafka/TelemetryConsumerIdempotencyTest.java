@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
 import com.police.iot.event.service.TelemetryEventIdempotencyService;
 import com.police.iot.event.service.TelemetrySnapshotService;
+import com.police.iot.event.service.TelemetrySnapshotService.SnapshotStoreResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -41,10 +42,12 @@ class TelemetryConsumerIdempotencyTest {
 
         when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z");
         when(idempotencyService.claim("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z")).thenReturn(true);
+        when(telemetrySnapshotService.storeTelemetryIfNewer(any(PoliceTelemetry.class)))
+                .thenReturn(new SnapshotStoreResult(true, null));
 
         consumer.consumeMain(record, "police-telemetry");
 
-        verify(telemetrySnapshotService).storeTelemetry(any(PoliceTelemetry.class));
+        verify(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         verify(idempotencyService, never()).release(any());
     }
 
@@ -59,7 +62,7 @@ class TelemetryConsumerIdempotencyTest {
 
         consumer.consumeMain(record, "police-telemetry");
 
-        verify(telemetrySnapshotService, never()).storeTelemetry(any(PoliceTelemetry.class));
+        verify(telemetrySnapshotService, never()).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         verify(idempotencyService, never()).release(any());
     }
 
@@ -71,11 +74,28 @@ class TelemetryConsumerIdempotencyTest {
 
         when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z");
         when(idempotencyService.claim("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z")).thenReturn(true);
-        doThrow(new RuntimeException("redis write failure")).when(telemetrySnapshotService).storeTelemetry(any(PoliceTelemetry.class));
+        doThrow(new RuntimeException("redis write failure")).when(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
 
         assertThrows(RuntimeException.class, () -> consumer.consumeMain(record, "police-telemetry"));
 
         verify(idempotencyService).release("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z");
+    }
+
+    @Test
+    void staleEventIsSkippedAfterClaimWithoutReleasingIdempotencyMarker() throws Exception {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        TelemetryConsumer consumer = new TelemetryConsumer(objectMapper, telemetrySnapshotService, idempotencyService, meterRegistry);
+        ConsumerRecord<String, String> record = createRecord("device-1", "corr-4");
+
+        when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("event:idempotency:NYPD:device-1:event:evt-4");
+        when(idempotencyService.claim("event:idempotency:NYPD:device-1:event:evt-4")).thenReturn(true);
+        when(telemetrySnapshotService.storeTelemetryIfNewer(any(PoliceTelemetry.class)))
+                .thenReturn(new SnapshotStoreResult(false, Instant.parse("2026-04-21T10:16:30Z")));
+
+        consumer.consumeMain(record, "police-telemetry");
+
+        verify(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
+        verify(idempotencyService, never()).release(any());
     }
 
     private ConsumerRecord<String, String> createRecord(String deviceId, String correlationId) throws Exception {
