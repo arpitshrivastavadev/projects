@@ -45,3 +45,9 @@ management:
           include: readinessState
     prometheus:
       enabled: true
+
+app:
+  security:
+    jwt:
+      dev:
+        enabled: false
