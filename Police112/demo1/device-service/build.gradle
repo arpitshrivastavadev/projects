@@ -9,6 +9,8 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.postgresql:postgresql'
     implementation 'org.flywaydb:flyway-core'
+
+    testImplementation 'org.springframework.security:spring-security-test'
 }
 
 bootJar {
