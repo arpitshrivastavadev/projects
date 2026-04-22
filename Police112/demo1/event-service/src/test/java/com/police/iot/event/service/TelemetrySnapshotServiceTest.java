@@ -3,6 +3,7 @@ package com.police.iot.event.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -34,11 +35,15 @@ class TelemetrySnapshotServiceTest {
     @Mock
     private SetOperations<String, Object> setOperations;
 
+    private TelemetrySnapshotService service(SimpleMeterRegistry meterRegistry, ObjectMapper objectMapper) {
+        return new TelemetrySnapshotService(redisTemplate, meterRegistry, objectMapper, ObservationRegistry.NOOP);
+    }
+
     @Test
     void getAllTelemetryFallbackReturnsEmptyList() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         ObjectMapper objectMapper = new ObjectMapper();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, objectMapper);
+        TelemetrySnapshotService service = service(meterRegistry, objectMapper);
 
         List<?> result = service.getAllTelemetryFallback(new RuntimeException("redis-down"));
 
@@ -49,7 +54,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void storeTelemetryAddsSnapshotAndDeviceIdToIndex() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry telemetry = PoliceTelemetry.builder().deviceId("device-1").build();
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
@@ -64,7 +69,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void getAllTelemetryReadsFromIndexedDeviceIds() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry telemetry = PoliceTelemetry.builder().deviceId("device-1").officerId("officer-1").build();
 
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
@@ -82,7 +87,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void getDeviceTelemetryConvertsMappedRedisValue() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("twin:snapshot:device-1"))
@@ -97,7 +102,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void getDeviceTelemetryReturnsNullWhenRedisValueCannotBeConverted() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("twin:snapshot:device-1")).thenReturn(List.of("unexpected"));
@@ -110,7 +115,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void storeTelemetryIfNewerUpdatesSnapshotWhenIncomingTimestampIsNewer() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry current = PoliceTelemetry.builder()
                 .deviceId("device-1")
                 .tenantId("NYPD")
@@ -136,7 +141,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void storeTelemetryIfNewerSkipsUpdateWhenIncomingTimestampIsOlder() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry current = PoliceTelemetry.builder()
                 .deviceId("device-1")
                 .tenantId("NYPD")
@@ -161,7 +166,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void storeTelemetryIfNewerSkipsUpdateWhenIncomingTimestampIsEqual() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry current = PoliceTelemetry.builder()
                 .deviceId("device-1")
                 .tenantId("NYPD")
@@ -185,7 +190,7 @@ class TelemetrySnapshotServiceTest {
     @Test
     void storeTelemetryIfNewerStoresSnapshotWhenCurrentSnapshotMissing() {
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        TelemetrySnapshotService service = new TelemetrySnapshotService(redisTemplate, meterRegistry, new ObjectMapper());
+        TelemetrySnapshotService service = service(meterRegistry, new ObjectMapper());
         PoliceTelemetry incoming = PoliceTelemetry.builder()
                 .deviceId("device-1")
                 .tenantId("NYPD")
