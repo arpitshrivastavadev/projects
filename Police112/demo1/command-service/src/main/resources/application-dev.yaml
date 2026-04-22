@@ -3,9 +3,25 @@ spring:
     activate:
       on-profile: dev
   kafka:
-    bootstrap-servers: localhost:29092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:police_db}
+    username: ${DB_USER:ecp_user}
+    password: ${DB_PASSWORD:ecp_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
 
 logging:
   level:
     root: INFO
     com.police.iot: DEBUG
+
+app:
+  security:
+    jwt:
+      dev:
+        enabled: true
+        issuer: police-iot-command-local
+        secret: local-command-service-jwt-signing-secret-32
