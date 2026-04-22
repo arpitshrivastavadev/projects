@@ -11,7 +11,6 @@ dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api 'com.fasterxml.jackson.core:jackson-databind'
     api 'net.logstash.logback:logstash-logback-encoder:7.4'
-    api 'io.micrometer:micrometer-tracing-bridge-brave'
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
     api 'org.springframework.kafka:spring-kafka'
