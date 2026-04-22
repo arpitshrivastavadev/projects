@@ -1,6 +1,17 @@
 spring:
   application:
     name: command-service
+  profiles:
+    default: dev
+  main:
+    log-startup-info: true
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
@@ -29,6 +40,14 @@ management:
         liveness:
           include: livenessState,ping
         readiness:
-          include: readinessState
+          include: readinessState,db
         startup:
           include: readinessState
+    prometheus:
+      enabled: true
+
+app:
+  security:
+    jwt:
+      dev:
+        enabled: false
