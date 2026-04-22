@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.police.iot.common.dto.PoliceTelemetry;
 import com.police.iot.common.security.CorrelationIdFilter;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -23,6 +24,11 @@ public class TelemetryPublishService {
 
     @Value("${police.kafka.topics.telemetry:police-telemetry}")
     private String telemetryTopic;
+
+    @PostConstruct
+    void enableKafkaObservation() {
+        kafkaTemplate.setObservationEnabled(true);
+    }
 
     public void publish(PoliceTelemetry telemetry) {
         try {
