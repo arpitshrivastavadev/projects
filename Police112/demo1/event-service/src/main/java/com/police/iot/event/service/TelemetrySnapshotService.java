@@ -7,6 +7,8 @@ import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -28,6 +30,7 @@ public class TelemetrySnapshotService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final MeterRegistry meterRegistry;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ObservationRegistry observationRegistry;
 
     public record SnapshotStoreResult(boolean updated, Instant existingTimestamp) {}
 
@@ -64,28 +67,36 @@ public class TelemetrySnapshotService {
     @Retry(name = "redisWriteOps", fallbackMethod = "storeTelemetryFallback")
     @Bulkhead(name = "redisWriteOps", fallbackMethod = "storeTelemetryFallback")
     public void storeTelemetry(PoliceTelemetry telemetry) {
-        redisTemplate.opsForValue().set(REDIS_KEY_PREFIX + telemetry.getDeviceId(), telemetry);
-        redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
+        Observation.createNotStarted("event.redis.store", observationRegistry)
+                .lowCardinalityKeyValue("redis.operation", "store")
+                .observe(() -> {
+                    redisTemplate.opsForValue().set(REDIS_KEY_PREFIX + telemetry.getDeviceId(), telemetry);
+                    redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
+                });
     }
 
     @CircuitBreaker(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
     @Retry(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
     @Bulkhead(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
     public SnapshotStoreResult storeTelemetryIfNewer(PoliceTelemetry telemetry) {
-        String snapshotKey = REDIS_KEY_PREFIX + telemetry.getDeviceId();
-        PoliceTelemetry current = toTelemetry(redisTemplate.opsForValue().get(snapshotKey));
-        Instant currentTimestamp = current == null ? null : current.getTimestamp();
-        Instant incomingTimestamp = telemetry.getTimestamp();
+        return Observation.createNotStarted("event.redis.store_if_newer", observationRegistry)
+                .lowCardinalityKeyValue("redis.operation", "store_if_newer")
+                .observe(() -> {
+                    String snapshotKey = REDIS_KEY_PREFIX + telemetry.getDeviceId();
+                    PoliceTelemetry current = toTelemetry(redisTemplate.opsForValue().get(snapshotKey));
+                    Instant currentTimestamp = current == null ? null : current.getTimestamp();
+                    Instant incomingTimestamp = telemetry.getTimestamp();
 
-        StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
-        if (staleReason != null) {
-            meterRegistry.counter("event.snapshot.stale.skipped", "reason", staleReason.metricTag).increment();
-            return new SnapshotStoreResult(false, currentTimestamp);
-        }
+                    StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
+                    if (staleReason != null) {
+                        meterRegistry.counter("event.snapshot.stale.skipped", "reason", staleReason.metricTag).increment();
+                        return new SnapshotStoreResult(false, currentTimestamp);
+                    }
 
-        redisTemplate.opsForValue().set(snapshotKey, telemetry);
-        redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
-        return new SnapshotStoreResult(true, currentTimestamp);
+                    redisTemplate.opsForValue().set(snapshotKey, telemetry);
+                    redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
+                    return new SnapshotStoreResult(true, currentTimestamp);
+                });
     }
 
     public PoliceTelemetry getDeviceTelemetryFallback(String deviceId, Throwable throwable) {
