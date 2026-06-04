@@ -10,6 +10,13 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Log any SQL query slower than 300ms — appears in logs as WARN from Hibernate
+        session:
+          events:
+            log:
+              LOG_QUERIES_SLOWER_THAN_MS: 300
+        # Log query statistics in dev to catch N+1 patterns
+        generate_statistics: false  # set true temporarily to debug N+1
   flyway:
     enabled: true
   lifecycle:
@@ -40,7 +47,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: "health,info,prometheus,metrics"
+        include: "health,info,prometheus,metrics,env,loggers,threaddump,heapdump,scheduledtasks"
   endpoint:
     health:
       probes:
@@ -56,6 +63,25 @@ management:
           include: readinessState
     prometheus:
       enabled: true
+    loggers:
+      enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      env: ${spring.profiles.active:default}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+      slo:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s
+    enable:
+      jvm: true
+      process: true
+      system: true
+      tomcat: true
+      hikaricp: true
 
 app:
   security:

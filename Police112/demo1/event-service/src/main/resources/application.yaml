@@ -40,7 +40,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: "health,info,prometheus,metrics"
+        include: "health,info,prometheus,metrics,env,loggers,threaddump,heapdump,scheduledtasks"
   endpoint:
     health:
       probes:
@@ -54,6 +54,35 @@ management:
           include: readinessState,redis
         startup:
           include: readinessState
+    # Allow log-level changes at runtime without restart (safe for prod debugging)
+    loggers:
+      enabled: true
+  # ── Tag every metric with service name + environment ──────────────────────
+  # Visible in Prometheus as: http_server_requests_seconds{service="event-service",env="prod",...}
+  metrics:
+    tags:
+      service: ${spring.application.name}
+      env: ${spring.profiles.active:default}
+    # ── Enable p50/p95/p99 histogram buckets for all HTTP endpoints ──────────
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        resilience4j.circuitbreaker.calls: 0.5, 0.95, 0.99
+      # SLO buckets — "how many requests finished under 50ms / 100ms / 500ms?"
+      slo:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s
+    # ── Enable all JVM metrics (heap, GC, threads, classloader) ─────────────
+    enable:
+      jvm: true
+      process: true
+      system: true
+      tomcat: true
+      kafka: true
+      hikaricp: true
+      resilience4j: true
 
 resilience4j:
   circuitbreaker:

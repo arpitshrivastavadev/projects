@@ -2,34 +2,62 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <springProperty scope="context" name="appName" source="spring.application.name"/>
+    <!-- ── Context properties pulled from Spring application.yml ── -->
+    <springProperty scope="context" name="appName"     source="spring.application.name"/>
+    <springProperty scope="context" name="appVersion"  source="spring.application.version" defaultValue="unknown"/>
+    <springProperty scope="context" name="environment" source="spring.profiles.active"     defaultValue="default"/>
 
+    <!-- ════════════════════════════════════════════════════════════
+         APPENDER 1 — Human-readable console (dev / local)
+         ════════════════════════════════════════════════════════════ -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [%X{traceId},%X{spanId},%X{correlationId},%X{tenantId}] - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [traceId=%X{traceId} spanId=%X{spanId} correlationId=%X{correlationId} tenantId=%X{tenantId}] - %msg%n%ex</pattern>
         </encoder>
     </appender>
 
+    <!-- ════════════════════════════════════════════════════════════
+         APPENDER 2 — JSON console (prod stdout → Filebeat → ELK)
+         All MDC keys (traceId, spanId, correlationId, tenantId)
+         are included automatically via <mdc/>.
+         ════════════════════════════════════════════════════════════ -->
     <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
             <providers>
-                <timestamp/>
-                <version/>
-                <logLevel/>
-                <threadName/>
-                <loggerName/>
-                <message/>
-                <context/>
-                <stackTrace/>
-                <mdc/> <!-- Includes traceId, spanId, correlationId, tenantId -->
+                <timestamp>
+                    <fieldName>timestamp</fieldName>
+                    <timeZone>UTC</timeZone>
+                </timestamp>
+                <logLevel>
+                    <fieldName>level</fieldName>
+                </logLevel>
+                <threadName>
+                    <fieldName>thread</fieldName>
+                </threadName>
+                <loggerName>
+                    <fieldName>logger</fieldName>
+                    <shortenedLoggerNameLength>36</shortenedLoggerNameLength>
+                </loggerName>
+                <message>
+                    <fieldName>message</fieldName>
+                </message>
+                <!-- Pulls all MDC keys: traceId, spanId, correlationId, tenantId -->
+                <mdc/>
+                <stackTrace>
+                    <fieldName>stack_trace</fieldName>
+                    <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                        <maxDepthPerCause>10</maxDepthPerCause>
+                        <rootCauseFirst>true</rootCauseFirst>
+                    </throwableConverter>
+                </stackTrace>
+                <!-- Static service-level fields — visible on every Kibana log line -->
                 <pattern>
                     <pattern>
                         {
-                            "service": "${appName}",
-                            "traceId": "%X{traceId}",
-                            "spanId": "%X{spanId}",
-                            "correlationId": "%X{correlationId}",
-                            "tenantId": "%X{tenantId}"
+                            "service":     "${appName}",
+                            "version":     "${appVersion}",
+                            "environment": "${environment}",
+                            "host":        "${HOSTNAME:-unknown}"
                         }
                     </pattern>
                 </pattern>
@@ -37,17 +65,101 @@
         </encoder>
     </appender>
 
-    <!-- PROFILES -->
+    <!-- ════════════════════════════════════════════════════════════
+         APPENDER 3 — Logstash TCP (direct push to Logstash :5000)
+         Use when Filebeat sidecar is NOT available (e.g. bare-metal).
+         Wrapped in ASYNC so network I/O never blocks app threads.
+         ════════════════════════════════════════════════════════════ -->
+    <appender name="LOGSTASH_TCP" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST:-localhost}:${LOGSTASH_PORT:-5000}</destination>
+        <reconnectionDelay>10 seconds</reconnectionDelay>
+        <connectionTimeout>5 seconds</connectionTimeout>
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <threadName/>
+                <loggerName/>
+                <message/>
+                <mdc/>
+                <stackTrace/>
+                <pattern>
+                    <pattern>
+                        {
+                            "service":     "${appName}",
+                            "version":     "${appVersion}",
+                            "environment": "${environment}",
+                            "host":        "${HOSTNAME:-unknown}"
+                        }
+                    </pattern>
+                </pattern>
+            </providers>
+        </encoder>
+    </appender>
+
+    <!-- Async wrapper: never blocks app thread; drops oldest logs if queue fills -->
+    <appender name="ASYNC_LOGSTASH" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>1024</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="LOGSTASH_TCP"/>
+    </appender>
+
+    <!-- ════════════════════════════════════════════════════════════
+         APPENDER 4 — Rolling file (disk fallback / audit trail)
+         Rotates daily, keeps 30 days, max 10 GB total.
+         ════════════════════════════════════════════════════════════ -->
+    <appender name="ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/${appName}.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/${appName}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>10GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <threadName/>
+                <loggerName/>
+                <message/>
+                <mdc/>
+                <stackTrace/>
+            </providers>
+        </encoder>
+    </appender>
+
+    <!-- ════════════════════════════════════════════════════════════
+         LOGGER TUNING — suppress noisy framework logs in prod
+         ════════════════════════════════════════════════════════════ -->
+    <logger name="org.apache.kafka"                                            level="WARN"/>
+    <logger name="org.springframework.kafka"                                   level="WARN"/>
+    <logger name="org.hibernate.SQL"                                           level="DEBUG"/>
+    <logger name="org.hibernate.engine.internal.StatisticalLoggingSessionEventListener" level="WARN"/>
+    <logger name="com.zaxxer.hikari"                                           level="INFO"/>
+    <logger name="io.micrometer"                                               level="WARN"/>
+    <logger name="org.springframework.security"                                level="WARN"/>
+
+    <!-- ════════════════════════════════════════════════════════════
+         PROFILE ACTIVATION
+         ════════════════════════════════════════════════════════════ -->
     <springProfile name="default,dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
         </root>
+        <logger name="com.police.iot" level="DEBUG"/>
     </springProfile>
 
     <springProfile name="prod">
         <root level="WARN">
             <appender-ref ref="JSON_CONSOLE"/>
+            <appender-ref ref="ASYNC_LOGSTASH"/>
+            <appender-ref ref="ROLLING_FILE"/>
         </root>
+        <logger name="com.police.iot" level="INFO"/>
     </springProfile>
 
 </configuration>
