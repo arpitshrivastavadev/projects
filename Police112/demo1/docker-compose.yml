@@ -170,7 +170,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:8.11.1
     ports:
-      - "5000:5000"     # TCP input (from LOGSTASH_TCP appender)
+      - "5010:5000"     # TCP input (from LOGSTASH_TCP appender) — host 5010 because macOS AirPlay owns 5000
       - "5001:5001/udp" # UDP input (optional syslog)
       - "9600:9600"     # Logstash monitoring API
     volumes:

@@ -123,7 +123,7 @@ resilience4j:
 police:
   event:
     idempotency:
-      ttl: ${POLICE_EVENT_IDEMPOTENCY_TTL:PT24H}
+      ttl: ${POLICE_EVENT_IDEMPOTENCY_TTL:PT1H}   # Reduced from 24h — 3M keys/day → 125K keys max
   kafka:
     topics:
       telemetry: police-telemetry

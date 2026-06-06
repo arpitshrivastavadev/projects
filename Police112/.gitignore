@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+package-lock.json
+
+# Gradle
+.gradle/
+.gradle-local/
+**/build/
+**/out/
+**/bin/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Logs
+*.log
+
+# Personal / temp files
+ECP_Interview_Prep.docx
+demo1/0,
+demo1/replay
+demo1/should

@@ -14,6 +14,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
     api 'org.springframework.kafka:spring-kafka'
+    compileOnly 'net.ttddyy:datasource-proxy:1.10'
 }
 
 group = 'com.police.iot'

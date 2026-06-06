@@ -1,6 +1,8 @@
 package com.police.iot.common.config;
 
 import lombok.extern.slf4j.Slf4j;
+import net.ttddyy.dsproxy.ExecutionInfo;
+import net.ttddyy.dsproxy.QueryInfo;
 import net.ttddyy.dsproxy.listener.SlowQueryListener;
 import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import javax.sql.DataSource;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,19 +49,20 @@ public class SlowQueryLoggerConfig {
     @Bean
     @Primary
     public DataSource dataSourceWithSlowQueryLogging(DataSource originalDataSource) {
-        SlowQueryListener slowQueryListener = new SlowQueryListener(
-                slowQueryThresholdMs,
-                TimeUnit.MILLISECONDS,
-                (execInfo, queryInfoList) -> {
-                    String sql = queryInfoList.isEmpty()
-                            ? "UNKNOWN"
-                            : queryInfoList.get(0).getQuery();
-                    log.warn("event=SLOW_QUERY duration_ms={} threshold_ms={} sql=\"{}\"",
-                            execInfo.getElapsedTime(),
-                            slowQueryThresholdMs,
-                            sql);
-                }
-        );
+        SlowQueryListener slowQueryListener = new SlowQueryListener() {
+            @Override
+            protected void onSlowQuery(ExecutionInfo execInfo, List<QueryInfo> queryInfoList, long startTime) {
+                String sql = queryInfoList.isEmpty()
+                        ? "UNKNOWN"
+                        : queryInfoList.get(0).getQuery();
+                log.warn("event=SLOW_QUERY duration_ms={} threshold_ms={} sql=\"{}\"",
+                        execInfo.getElapsedTime(),
+                        slowQueryThresholdMs,
+                        sql);
+            }
+        };
+        slowQueryListener.setThreshold(slowQueryThresholdMs);
+        slowQueryListener.setThresholdTimeUnit(TimeUnit.MILLISECONDS);
 
         return ProxyDataSourceBuilder
                 .create(originalDataSource)

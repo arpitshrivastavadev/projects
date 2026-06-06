@@ -149,6 +149,7 @@
     <springProfile name="default,dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="ASYNC_LOGSTASH"/>
         </root>
         <logger name="com.police.iot" level="DEBUG"/>
     </springProfile>

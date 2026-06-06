@@ -23,7 +23,7 @@ public class TelemetryEventIdempotencyService {
 
     public TelemetryEventIdempotencyService(RedisTemplate<String, Object> redisTemplate,
                                             MeterRegistry meterRegistry,
-                                            @Value("${police.event.idempotency.ttl:PT24H}") Duration markerTtl) {
+                                            @Value("${police.event.idempotency.ttl:PTH}") Duration markerTtl) {
         this.redisTemplate = redisTemplate;
         this.meterRegistry = meterRegistry;
         this.markerTtl = markerTtl;
