@@ -55,3 +55,20 @@ scrape_configs:
       - targets: ['sim-service:8084']
         labels:
           service: sim-service
+
+  # ── Jaeger internal metrics (span ingestion rates, storage health) ──
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+        labels:
+          service: jaeger
+
+  # ── OTel Collector SpanMetrics (RED: calls_total, duration_*) ────
+  # The SpanMetrics connector aggregates incoming trace spans into RED
+  # metrics.  Jaeger Monitor tab queries Prometheus for these exact
+  # metric names (calls_total, duration_milliseconds_bucket, etc.).
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8889']
+        labels:
+          service: otel-collector
