@@ -75,9 +75,13 @@ services:
       SPRING_DATASOURCE_PASSWORD: ecp_password
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: device-service
     depends_on:
       postgres:
         condition: service_healthy
+      jaeger:
+        condition: service_started
 
   event-service:
     build:
@@ -91,10 +95,13 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: event-service
     depends_on:
       - kafka
       - redis
       - kafka-init
+      - jaeger
 
   sim-service:
     build:
@@ -108,9 +115,12 @@ services:
       POLICE_SIMULATOR_DEVICE_COUNT: 1000
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: sim-service
     depends_on:
       - kafka
       - kafka-init
+      - jaeger
 
   command-service:
     build:
@@ -126,6 +136,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ecp_password
       LOGSTASH_HOST: logstash
       LOGSTASH_PORT: 5000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      OTEL_SERVICE_NAME: command-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,6 +145,8 @@ services:
         condition: service_started
       kafka-init:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_started
 
   # ══════════════════════════════════════════════════════════════
   # OBSERVABILITY STACK
