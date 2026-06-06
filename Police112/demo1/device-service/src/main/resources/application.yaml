@@ -5,11 +5,13 @@ spring:
     default: dev
   main:
     log-startup-info: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   jpa:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         # Log any SQL query slower than 300ms — appears in logs as WARN from Hibernate
         session:
           events:
@@ -19,6 +21,9 @@ spring:
         generate_statistics: false  # set true temporarily to debug N+1
   flyway:
     enabled: true
+    table: device_flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 1.1.0
   lifecycle:
     timeout-per-shutdown-phase: 30s
   kafka:

@@ -98,33 +98,6 @@
     </appender>
 
     <!-- ════════════════════════════════════════════════════════════
-         APPENDER 4 — Rolling file (disk fallback / audit trail)
-         Rotates daily, keeps 30 days, max 10 GB total.
-         ════════════════════════════════════════════════════════════ -->
-    <appender name="ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/${appName}.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/${appName}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
-                <maxFileSize>100MB</maxFileSize>
-            </timeBasedFileNamingAndTriggeringPolicy>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>10GB</totalSizeCap>
-        </rollingPolicy>
-        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-            <providers>
-                <timestamp/>
-                <logLevel/>
-                <threadName/>
-                <loggerName/>
-                <message/>
-                <mdc/>
-                <stackTrace/>
-            </providers>
-        </encoder>
-    </appender>
-
-    <!-- ════════════════════════════════════════════════════════════
          LOGGER TUNING — suppress noisy framework logs in prod
          ════════════════════════════════════════════════════════════ -->
     <logger name="org.apache.kafka"                                            level="WARN"/>
@@ -147,6 +120,31 @@
     </springProfile>
 
     <springProfile name="prod">
+        <!-- APPENDER 4 — Rolling file (disk fallback / audit trail)
+             Defined here so it is never instantiated in dev, avoiding
+             the "appender not referenced" Logback warning. -->
+        <appender name="ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/${appName}.log</file>
+            <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                <fileNamePattern>logs/${appName}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                    <maxFileSize>100MB</maxFileSize>
+                </timeBasedFileNamingAndTriggeringPolicy>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>10GB</totalSizeCap>
+            </rollingPolicy>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <logLevel/>
+                    <threadName/>
+                    <loggerName/>
+                    <message/>
+                    <mdc/>
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
         <root level="WARN">
             <appender-ref ref="JSON_CONSOLE"/>
             <appender-ref ref="LOGSTASH_TCP"/>

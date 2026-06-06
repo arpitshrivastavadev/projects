@@ -5,13 +5,16 @@ spring:
     default: dev
   main:
     log-startup-info: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   jpa:
     open-in-view: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
   flyway:
     enabled: true
+    table: command_flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 1.0.0
   lifecycle:
     timeout-per-shutdown-phase: 30s
 
