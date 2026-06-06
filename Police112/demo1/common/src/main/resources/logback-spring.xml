@@ -97,14 +97,6 @@
         </encoder>
     </appender>
 
-    <!-- Async wrapper: never blocks app thread; drops oldest logs if queue fills -->
-    <appender name="ASYNC_LOGSTASH" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>1024</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <neverBlock>true</neverBlock>
-        <appender-ref ref="LOGSTASH_TCP"/>
-    </appender>
-
     <!-- ════════════════════════════════════════════════════════════
          APPENDER 4 — Rolling file (disk fallback / audit trail)
          Rotates daily, keeps 30 days, max 10 GB total.
@@ -149,7 +141,7 @@
     <springProfile name="default,dev">
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
-            <appender-ref ref="ASYNC_LOGSTASH"/>
+            <appender-ref ref="LOGSTASH_TCP"/>
         </root>
         <logger name="com.police.iot" level="DEBUG"/>
     </springProfile>
@@ -157,7 +149,7 @@
     <springProfile name="prod">
         <root level="WARN">
             <appender-ref ref="JSON_CONSOLE"/>
-            <appender-ref ref="ASYNC_LOGSTASH"/>
+            <appender-ref ref="LOGSTASH_TCP"/>
             <appender-ref ref="ROLLING_FILE"/>
         </root>
         <logger name="com.police.iot" level="INFO"/>

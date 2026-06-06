@@ -73,6 +73,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/police_db
       SPRING_DATASOURCE_USERNAME: ecp_user
       SPRING_DATASOURCE_PASSWORD: ecp_password
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +89,8 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATA_REDIS_HOST: redis
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
       - kafka
       - redis
@@ -102,6 +106,8 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       POLICE_SIMULATOR_DEVICE_COUNT: 1000
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
       - kafka
       - kafka-init
@@ -115,9 +121,18 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/police_db
+      SPRING_DATASOURCE_USERNAME: ecp_user
+      SPRING_DATASOURCE_PASSWORD: ecp_password
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5000
     depends_on:
-      - kafka
-      - kafka-init
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
 
   # ══════════════════════════════════════════════════════════════
   # OBSERVABILITY STACK
@@ -146,6 +161,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
 
