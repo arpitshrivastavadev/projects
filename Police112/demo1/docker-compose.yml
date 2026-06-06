@@ -2,6 +2,7 @@ services:
   # Infrastructure
   postgres:
     image: postgres:15-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ecp_user
       POSTGRES_PASSWORD: ecp_password
@@ -15,20 +16,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    mem_limit: 300m
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    mem_limit: 512m
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_HEAP_OPTS: "-Xmx256m -Xms128m"
+    mem_limit: 400m
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
+    restart: unless-stopped
     depends_on:
       - zookeeper
     ports:
@@ -40,6 +48,12 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
+      # Keep only last 24h of messages and cap per-partition at 256MB to control disk usage
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_BYTES: 268435456
+      KAFKA_LOG_SEGMENT_BYTES: 67108864
+    mem_limit: 800m
 
   kafka-init:
     image: confluentinc/cp-kafka:7.4.0
@@ -59,12 +73,14 @@ services:
       echo -e 'Successfully created the following topics:'
       kafka-topics --bootstrap-server kafka:9092 --list
       "
+    mem_limit: 300m
 
   # Microservices
   device-service:
     build:
       context: .
       dockerfile: device-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8081:8081"
     environment:
@@ -77,16 +93,19 @@ services:
       LOGSTASH_PORT: 5000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
       OTEL_SERVICE_NAME: device-service
+      JAVA_OPTS: "-Xmx384m -Xms128m"
     depends_on:
       postgres:
         condition: service_healthy
       jaeger:
         condition: service_started
+    mem_limit: 512m
 
   event-service:
     build:
       context: .
       dockerfile: event-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8083:8083"
     environment:
@@ -97,16 +116,20 @@ services:
       LOGSTASH_PORT: 5000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
       OTEL_SERVICE_NAME: event-service
+      OTEL_PROPAGATORS: tracecontext,baggage
+      JAVA_OPTS: "-Xmx384m -Xms128m"
     depends_on:
       - kafka
       - redis
       - kafka-init
       - jaeger
+    mem_limit: 512m
 
   sim-service:
     build:
       context: .
       dockerfile: sim-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8084:8084"
     environment:
@@ -117,15 +140,19 @@ services:
       LOGSTASH_PORT: 5000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
       OTEL_SERVICE_NAME: sim-service
+      OTEL_PROPAGATORS: tracecontext,baggage
+      JAVA_OPTS: "-Xmx384m -Xms128m"
     depends_on:
       - kafka
       - kafka-init
       - jaeger
+    mem_limit: 512m
 
   command-service:
     build:
       context: .
       dockerfile: command-service/Dockerfile
+    restart: unless-stopped
     ports:
       - "8082:8082"
     environment:
@@ -138,6 +165,7 @@ services:
       LOGSTASH_PORT: 5000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
       OTEL_SERVICE_NAME: command-service
+      JAVA_OPTS: "-Xmx384m -Xms128m"
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,6 +175,7 @@ services:
         condition: service_completed_successfully
       jaeger:
         condition: service_started
+    mem_limit: 512m
 
   # ══════════════════════════════════════════════════════════════
   # OBSERVABILITY STACK
@@ -155,6 +184,7 @@ services:
   # ── Prometheus — scrapes /actuator/prometheus from all services ──
   prometheus:
     image: prom/prometheus:v2.48.0
+    restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
@@ -163,10 +193,12 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=7d'
       - '--web.enable-lifecycle'
+    mem_limit: 256m
 
   # ── Grafana — dashboards for JVM heap, p95/p99, Kafka lag ──
   grafana:
     image: grafana/grafana:10.2.0
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
@@ -178,10 +210,12 @@ services:
       - ./infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
+    mem_limit: 256m
 
   # ── Elasticsearch — stores logs from Logstash ──
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    restart: unless-stopped
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false       # disabled for local dev only
@@ -195,10 +229,12 @@ services:
       interval: 10s
       timeout: 10s
       retries: 12
+    mem_limit: 1536m
 
   # ── Logstash — receives logs via TCP :5000, parses, ships to ES ──
   logstash:
     image: docker.elastic.co/logstash/logstash:8.11.1
+    restart: unless-stopped
     ports:
       - "5010:5000"     # TCP input (from LOGSTASH_TCP appender) — host 5010 because macOS AirPlay owns 5000
       - "5001:5001/udp" # UDP input (optional syslog)
@@ -210,10 +246,12 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    mem_limit: 768m
 
   # ── Kibana — visualise logs from Elasticsearch ──
   kibana:
     image: docker.elastic.co/kibana/kibana:8.11.1
+    restart: unless-stopped
     ports:
       - "5601:5601"
     environment:
@@ -221,15 +259,19 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    mem_limit: 800m
 
   # ── Jaeger — distributed tracing UI (OTLP receiver) ──
   jaeger:
     image: jaegertracing/all-in-one:1.52
+    restart: unless-stopped
     ports:
       - "16686:16686"   # Jaeger UI
       - "4318:4318"     # OTLP HTTP receiver (matches OTEL_EXPORTER_OTLP_ENDPOINT)
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      MEMORY_MAX_TRACES: "10000"
+    mem_limit: 512m
 
 volumes:
   postgres_data:

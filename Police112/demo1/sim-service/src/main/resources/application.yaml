@@ -19,6 +19,8 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       retries: 3
       acks: 1 # Faster for simulation
+    template:
+      observation-enabled: true
 
 police:
   simulator:
@@ -39,6 +41,14 @@ server:
     accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:50}
 
 management:
+  tracing:
+    sampling:
+      probability: 1.0
+    propagation:
+      type: w3c
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
   endpoints:
     web:
       exposure:
