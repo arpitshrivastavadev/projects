@@ -1,4 +1,3 @@
----
 apiVersion: 1
 
 contactPoints:
@@ -9,16 +8,16 @@ contactPoints:
         type: slack
         settings:
           url: SLACK_WEBHOOK_URL_REDACTED
-          channel: "#police112-alerts"
-          title: |
-            {{ if eq .Status "firing" }}🔴 ALERT FIRING{{ else }}✅ ALERT RESOLVED{{ end }}
-          text: |
+          recipient: "#112-alerts"
+          mentionChannel: ""
+          token: ""
+          username: "Grafana Police112"
+          icon_emoji: ":rotating_light:"
+          title: '{{ template "slack.default.title" . }}'
+          text: >-
             {{ range .Alerts }}
-            *Alert:* {{ .Labels.alertname }}
-            *Service:* {{ .Labels.job }}
-            *Severity:* {{ .Labels.severity }}
-            *Summary:* {{ .Annotations.summary }}
-            *Description:* {{ .Annotations.description }}
-            *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+            *{{ .Labels.alertname }}* | Severity: {{ .Labels.severity }}
+            {{ .Annotations.summary }}
+            {{ .Annotations.description }}
             {{ end }}
         disableResolveMessage: false
