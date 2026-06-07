@@ -8,6 +8,7 @@ groups:
     interval: 1m
     rules:
 
+      # Fires SEPARATELY for each service that goes down
       - uid: alert-container-down
         title: Container Down
         condition: C
@@ -40,9 +41,10 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Container {{ $labels.job }} is DOWN"
-          description: "Service {{ $labels.job }} has been unreachable for more than 1 minute."
+          summary: "🚨 {{ $labels.job }} is DOWN"
+          description: "Service {{ $labels.job }} (instance: {{ $labels.instance }}) has been unreachable for more than 1 minute. Check: docker compose ps | grep {{ $labels.job }}"
 
+      # Fires with actual disk % value
       - uid: alert-disk-critical
         title: Disk Usage Critical
         condition: C
@@ -53,7 +55,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100
+              expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -75,9 +77,10 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Disk usage is above 85%"
-          description: "Ubuntu PC disk usage exceeded 85%. Risk of crash. Free up space immediately."
+          summary: "💾 Disk usage is {{ $values.A }}% — CRITICAL"
+          description: "Ubuntu PC disk usage is at {{ $values.A }}%. Risk of application crash! Run: df -h && docker system prune -f"
 
+      # Fires SEPARATELY for each service with its heap %
       - uid: alert-heap-critical
         title: JVM Heap Critical
         condition: C
@@ -88,7 +91,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100
+              expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -110,9 +113,10 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "JVM Heap Critical on {{ $labels.job }}"
-          description: "Service {{ $labels.job }} heap above 85%. OOM crash imminent."
+          summary: "☕ {{ $labels.job }} Heap at {{ $values.A }}% — CRITICAL"
+          description: "Service {{ $labels.job }} heap is at {{ $values.A }}%. OOM crash imminent! Check Grafana JVM dashboard immediately."
 
+      # Fires per topic with actual lag number
       - uid: alert-kafka-lag-critical
         title: Kafka Consumer Lag Critical
         condition: C
@@ -123,7 +127,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: sum(kafka_consumer_fetch_manager_records_lag) by (topic)
+              expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -145,8 +149,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Kafka consumer lag critically high"
-          description: "Topic {{ $labels.topic }} lag exceeded 50,000. event-service cannot keep up."
+          summary: "📨 Kafka lag {{ $values.A }} on {{ $labels.topic }} — CRITICAL"
+          description: "Topic {{ $labels.topic }} consumer lag is {{ $values.A }}. event-service cannot keep up with telemetry. Check Grafana Kafka dashboard."
 
   - orgId: 1
     name: Warning Alerts
@@ -164,7 +168,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100
+              expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -186,8 +190,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Disk usage above 70%"
-          description: "Ubuntu PC disk at {{ $values.A.Value | printf \"%.1f\" }}%. Plan cleanup before 85% critical threshold."
+          summary: "💾 Disk usage at {{ $values.A }}% — Warning"
+          description: "Ubuntu PC disk at {{ $values.A }}%. Plan cleanup before hitting 85% critical threshold. Run: df -h"
 
       - uid: alert-heap-warning
         title: JVM Heap Warning
@@ -199,7 +203,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100
+              expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -221,8 +225,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "JVM Heap Warning on {{ $labels.job }}"
-          description: "Service {{ $labels.job }} heap at {{ $values.A.Value | printf \"%.1f\" }}%. Critical fires at 85%."
+          summary: "☕ {{ $labels.job }} Heap at {{ $values.A }}% — Warning"
+          description: "Service {{ $labels.job }} heap at {{ $values.A }}%. Monitor closely — critical alert fires at 85%."
 
       - uid: alert-kafka-lag-warning
         title: Kafka Consumer Lag Warning
@@ -234,7 +238,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: sum(kafka_consumer_fetch_manager_records_lag) by (topic)
+              expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -256,8 +260,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Kafka consumer lag rising"
-          description: "Topic {{ $labels.topic }} lag is {{ $values.A.Value }}. event-service processing slowing."
+          summary: "📨 Kafka lag {{ $values.A }} on {{ $labels.topic }} — Warning"
+          description: "Topic {{ $labels.topic }} consumer lag is {{ $values.A }}. event-service processing slowing down. Monitor Grafana Kafka dashboard."
 
       - uid: alert-postgres-connections
         title: PostgreSQL Connection Pool Warning
@@ -269,7 +273,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: (hikaricp_connections_active / hikaricp_connections_max) * 100
+              expr: round((hikaricp_connections_active / hikaricp_connections_max) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -291,8 +295,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "DB connection pool above 80% on {{ $labels.job }}"
-          description: "Service {{ $labels.job }} HikariCP pool at {{ $values.A.Value | printf \"%.1f\" }}%."
+          summary: "🗄️ {{ $labels.job }} DB pool at {{ $values.A }}% — Warning"
+          description: "Service {{ $labels.job }} HikariCP pool at {{ $values.A }}%. Risk of connection timeout under load."
 
       - uid: alert-redis-memory
         title: Redis Memory Warning
@@ -304,7 +308,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: redis_memory_used_bytes / 1024 / 1024
+              expr: round(redis_memory_used_bytes / 1024 / 1024)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -326,8 +330,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Redis memory above 400MB"
-          description: "Redis using {{ $values.A.Value | printf \"%.0f\" }}MB. Consider adding maxmemory limit."
+          summary: "⚡ Redis using {{ $values.A }}MB — Warning"
+          description: "Redis memory at {{ $values.A }}MB. Consider adding: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru"
 
       - uid: alert-cpu-warning
         title: High CPU Usage Warning
@@ -339,7 +343,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+              expr: round(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -361,8 +365,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Ubuntu CPU above 80% sustained"
-          description: "CPU at {{ $values.A.Value | printf \"%.1f\" }}% for 5+ minutes."
+          summary: "🖥️ Ubuntu CPU at {{ $values.A }}% — Warning"
+          description: "CPU usage at {{ $values.A }}% sustained for 5+ minutes. Check which container is consuming: docker stats --no-stream"
 
       - uid: alert-error-rate
         title: High Error Rate Warning
@@ -374,7 +378,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: sum(increase(logback_events_total{level="error"}[1m])) by (job)
+              expr: round(sum by (job) (increase(logback_events_total{level="error"}[1m])))
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
@@ -396,8 +400,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High error rate in {{ $labels.job }}"
-          description: "Service {{ $labels.job }} logging {{ $values.A.Value | printf \"%.0f\" }} errors/min. Check Kibana: http://192.168.1.6:5601"
+          summary: "❌ {{ $labels.job }} — {{ $values.A }} errors/min"
+          description: "Service {{ $labels.job }} logging {{ $values.A }} errors/min. Check Kibana: http://192.168.1.6:5601 → filter by service={{ $labels.job }} level=ERROR"
 
       - uid: alert-service-restart
         title: Service Restart Detected
@@ -431,8 +435,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Service {{ $labels.job }} restarted"
-          description: "Service {{ $labels.job }} restarted unexpectedly. Check Kibana logs: http://192.168.1.6:5601"
+          summary: "🔄 {{ $labels.job }} restarted unexpectedly"
+          description: "Service {{ $labels.job }} restarted in the last 10 minutes. Check logs: docker compose logs {{ $labels.job }} --tail 50"
 
       - uid: alert-gc-pause
         title: GC Pause Too Long
@@ -466,5 +470,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Long GC pause on {{ $labels.job }}"
-          description: "Service {{ $labels.job }} GC pause exceeded 500ms. Max: {{ $values.A.Value | printf \"%.3f\" }}s"
+          summary: "⏱️ {{ $labels.job }} GC pause {{ $values.A }}s — Warning"
+          description: "Service {{ $labels.job }} GC pause is {{ $values.A }}s (threshold: 0.5s). Users may experience latency spikes. Check Grafana JVM dashboard."
