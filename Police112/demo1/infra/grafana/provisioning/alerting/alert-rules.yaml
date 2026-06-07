@@ -17,24 +17,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: up{job=~"device-service|event-service|command-service|sim-service"}
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: lt
                     params: [1]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: Alerting
         execErrState: Alerting
         for: 1m
@@ -53,24 +61,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [85]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 2m
@@ -89,24 +105,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [85]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 2m
@@ -125,24 +149,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [50000]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 3m
@@ -166,24 +198,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [70]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 5m
@@ -201,24 +241,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [70]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 5m
@@ -236,24 +284,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [10000]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 3m
@@ -271,24 +327,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round((hikaricp_connections_active / hikaricp_connections_max) * 100)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [80]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 3m
@@ -306,24 +370,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round(redis_memory_used_bytes / 1024 / 1024)
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [400]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 5m
@@ -341,24 +413,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [80]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 5m
@@ -376,24 +456,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: round(sum by (job) (increase(logback_events_total{level="error"}[1m])))
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [50]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 2m
@@ -411,24 +499,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: changes(process_start_time_seconds{job=~"device-service|event-service|command-service|sim-service"}[10m])
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [0]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 0m
@@ -446,24 +542,32 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: PRFA57CFB59B2093
+            datasourceUid: PBFA97CFB590B2093
             model:
+              refId: A
               expr: jvm_gc_pause_seconds_max
               intervalMs: 1000
               maxDataPoints: 43200
           - refId: C
             relativeTimeRange:
-              from: 600
+              from: 0
               to: 0
             datasourceUid: __expr__
             model:
-              type: threshold
+              refId: C
+              type: classic_conditions
               conditions:
-                - evaluator:
+                - type: query
+                  evaluator:
                     type: gt
                     params: [0.5]
+                  operator:
+                    type: and
                   query:
                     params: [A]
+                  reducer:
+                    type: last
+                    params: []
         noDataState: NoData
         execErrState: Error
         for: 2m
