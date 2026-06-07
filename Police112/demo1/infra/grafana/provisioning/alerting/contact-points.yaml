@@ -1,0 +1,24 @@
+---
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: Slack Police112
+    receivers:
+      - uid: slack-police112
+        type: slack
+        settings:
+          url: SLACK_WEBHOOK_URL_REDACTED
+          channel: "#police112-alerts"
+          title: |
+            {{ if eq .Status "firing" }}🔴 ALERT FIRING{{ else }}✅ ALERT RESOLVED{{ end }}
+          text: |
+            {{ range .Alerts }}
+            *Alert:* {{ .Labels.alertname }}
+            *Service:* {{ .Labels.job }}
+            *Severity:* {{ .Labels.severity }}
+            *Summary:* {{ .Annotations.summary }}
+            *Description:* {{ .Annotations.description }}
+            *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+            {{ end }}
+        disableResolveMessage: false

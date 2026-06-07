@@ -1,0 +1,470 @@
+---
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Critical Alerts
+    folder: Police112
+    interval: 1m
+    rules:
+
+      - uid: alert-container-down
+        title: Container Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job=~"device-service|event-service|command-service|sim-service"}
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  query:
+                    params: [A]
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.job }} is DOWN"
+          description: "Service {{ $labels.job }} has been unreachable for more than 1 minute."
+
+      - uid: alert-disk-critical
+        title: Disk Usage Critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage is above 85%"
+          description: "Ubuntu PC disk usage exceeded 85%. Risk of crash. Free up space immediately."
+
+      - uid: alert-heap-critical
+        title: JVM Heap Critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "JVM Heap Critical on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} heap above 85%. OOM crash imminent."
+
+      - uid: alert-kafka-lag-critical
+        title: Kafka Consumer Lag Critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(kafka_consumer_fetch_manager_records_lag) by (topic)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [50000]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka consumer lag critically high"
+          description: "Topic {{ $labels.topic }} lag exceeded 50,000. event-service cannot keep up."
+
+  - orgId: 1
+    name: Warning Alerts
+    folder: Police112
+    interval: 1m
+    rules:
+
+      - uid: alert-disk-warning
+        title: Disk Usage Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [70]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage above 70%"
+          description: "Ubuntu PC disk at {{ $values.A.Value | printf \"%.1f\" }}%. Plan cleanup before 85% critical threshold."
+
+      - uid: alert-heap-warning
+        title: JVM Heap Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [70]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM Heap Warning on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} heap at {{ $values.A.Value | printf \"%.1f\" }}%. Critical fires at 85%."
+
+      - uid: alert-kafka-lag-warning
+        title: Kafka Consumer Lag Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(kafka_consumer_fetch_manager_records_lag) by (topic)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [10000]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag rising"
+          description: "Topic {{ $labels.topic }} lag is {{ $values.A.Value }}. event-service processing slowing."
+
+      - uid: alert-postgres-connections
+        title: PostgreSQL Connection Pool Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (hikaricp_connections_active / hikaricp_connections_max) * 100
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB connection pool above 80% on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} HikariCP pool at {{ $values.A.Value | printf \"%.1f\" }}%."
+
+      - uid: alert-redis-memory
+        title: Redis Memory Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: redis_memory_used_bytes / 1024 / 1024
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [400]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory above 400MB"
+          description: "Redis using {{ $values.A.Value | printf \"%.0f\" }}MB. Consider adding maxmemory limit."
+
+      - uid: alert-cpu-warning
+        title: High CPU Usage Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ubuntu CPU above 80% sustained"
+          description: "CPU at {{ $values.A.Value | printf \"%.1f\" }}% for 5+ minutes."
+
+      - uid: alert-error-rate
+        title: High Error Rate Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(logback_events_total{level="error"}[1m])) by (job)
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [50]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in {{ $labels.job }}"
+          description: "Service {{ $labels.job }} logging {{ $values.A.Value | printf \"%.0f\" }} errors/min. Check Kibana: http://192.168.1.6:5601"
+
+      - uid: alert-service-restart
+        title: Service Restart Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: changes(process_start_time_seconds{job=~"device-service|event-service|command-service|sim-service"}[10m])
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service {{ $labels.job }} restarted"
+          description: "Service {{ $labels.job }} restarted unexpectedly. Check Kibana logs: http://192.168.1.6:5601"
+
+      - uid: alert-gc-pause
+        title: GC Pause Too Long
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: jvm_gc_pause_seconds_max
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.5]
+                  query:
+                    params: [A]
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long GC pause on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} GC pause exceeded 500ms. Max: {{ $values.A.Value | printf \"%.3f\" }}s"
