@@ -17,7 +17,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: up{job=~"device-service|event-service|command-service|sim-service"}
               intervalMs: 1000
@@ -53,7 +53,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
@@ -89,7 +89,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
@@ -125,7 +125,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
@@ -166,7 +166,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round((1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100)
               intervalMs: 1000
@@ -201,7 +201,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round((jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100)
               intervalMs: 1000
@@ -236,7 +236,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: sum by (topic) (kafka_consumer_fetch_manager_records_lag{job="event-service"})
               intervalMs: 1000
@@ -271,7 +271,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round((hikaricp_connections_active / hikaricp_connections_max) * 100)
               intervalMs: 1000
@@ -306,7 +306,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round(redis_memory_used_bytes / 1024 / 1024)
               intervalMs: 1000
@@ -341,7 +341,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100))
               intervalMs: 1000
@@ -376,7 +376,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: round(sum by (job) (increase(logback_events_total{level="error"}[1m])))
               intervalMs: 1000
@@ -411,7 +411,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: changes(process_start_time_seconds{job=~"device-service|event-service|command-service|sim-service"}[10m])
               intervalMs: 1000
@@ -446,7 +446,7 @@ groups:
             relativeTimeRange:
               from: 600
               to: 0
-            datasourceUid: prometheus
+            datasourceUid: PRFA57CFB59B2093
             model:
               expr: jvm_gc_pause_seconds_max
               intervalMs: 1000
