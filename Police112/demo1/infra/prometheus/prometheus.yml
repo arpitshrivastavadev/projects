@@ -1,74 +1,62 @@
 global:
-  scrape_interval:     15s   # pull metrics every 15 seconds
+  scrape_interval: 15s
   evaluation_interval: 15s
-  # Attach these labels to every time series scraped — visible in Grafana
   external_labels:
     cluster: 'ecp-local'
 
-# ── Alert rule files (add when you create Grafana alerting rules) ──
-# rule_files:
-#   - /etc/prometheus/alerts/*.yml
-
 scrape_configs:
 
-  # ── Self-monitoring ──────────────────────────────────────────────
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # ── ECP Microservices ────────────────────────────────────────────
-  # Each service exposes /actuator/prometheus automatically via
-  # micrometer-registry-prometheus + spring-boot-starter-actuator.
-  #
-  # Metrics you get for FREE:
-  #   JVM heap:      jvm_memory_used_bytes{area="heap"}
-  #   GC pauses:     jvm_gc_pause_seconds_*
-  #   Threads:       jvm_threads_live_threads
-  #   HTTP latency:  http_server_requests_seconds_bucket (for p95/p99)
-  #   DB pool:       hikaricp_connections_active
-  #   Kafka:         spring_kafka_listener_seconds_*
-  #   Resilience4j:  resilience4j_circuitbreaker_state
   - job_name: 'device-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['device-service:8081']
-        labels:
-          service: device-service
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: 'event-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['event-service:8083']
-        labels:
-          service: event-service
 
   - job_name: 'command-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['command-service:8082']
-        labels:
-          service: command-service
 
   - job_name: 'sim-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['sim-service:8084']
-        labels:
-          service: sim-service
 
-  # ── Jaeger internal metrics (span ingestion rates, storage health) ──
   - job_name: 'jaeger'
     static_configs:
       - targets: ['jaeger:14269']
-        labels:
-          service: jaeger
 
-  # ── OTel Collector SpanMetrics (RED: calls_total, duration_*) ────
-  # The SpanMetrics connector aggregates incoming trace spans into RED
-  # metrics.  Jaeger Monitor tab queries Prometheus for these exact
-  # metric names (calls_total, duration_milliseconds_bucket, etc.).
   - job_name: 'otel-collector'
     static_configs:
       - targets: ['otel-collector:8889']
-        labels:
-          service: otel-collector
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'ubuntu-pc'
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
