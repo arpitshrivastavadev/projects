@@ -16,8 +16,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import jakarta.annotation.PostConstruct;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +34,17 @@ public class TelemetrySnapshotService {
     private final MeterRegistry meterRegistry;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final ObservationRegistry observationRegistry;
+
+    // Pre-registered counters for the hot path — avoids per-call MeterRegistry lookup
+    private Map<StaleReason, Counter> staleCounters;
+
+    @PostConstruct
+    private void initCounters() {
+        staleCounters = new EnumMap<>(StaleReason.class);
+        for (StaleReason reason : StaleReason.values()) {
+            staleCounters.put(reason, meterRegistry.counter("event.snapshot.stale.skipped", "reason", reason.metricTag));
+        }
+    }
 
     public record SnapshotStoreResult(boolean updated, Instant existingTimestamp) {}
 
@@ -48,19 +62,28 @@ public class TelemetrySnapshotService {
     @Bulkhead(name = "redisReadOps", fallbackMethod = "getAllTelemetryFallback")
     @RateLimiter(name = "redisReadOps", fallbackMethod = "getAllTelemetryFallback")
     public List<PoliceTelemetry> getAllTelemetry() {
-        List<PoliceTelemetry> telemetryList = new ArrayList<>();
         Set<Object> deviceIds = redisTemplate.opsForSet().members(REDIS_DEVICE_INDEX_KEY);
+        if (deviceIds == null || deviceIds.isEmpty()) {
+            return List.of();
+        }
 
-        if (deviceIds != null) {
-            for (Object deviceId : deviceIds) {
-                Object telemetry = redisTemplate.opsForValue().get(REDIS_KEY_PREFIX + deviceId);
-                PoliceTelemetry converted = toTelemetry(telemetry);
-                if (converted != null) {
-                    telemetryList.add(converted);
+        List<String> keys = deviceIds.stream()
+                .map(id -> REDIS_KEY_PREFIX + id)
+                .toList();
+
+        // Single MGET round-trip replaces N individual GETs (N+1 fix)
+        List<Object> rawValues = redisTemplate.opsForValue().multiGet(keys);
+
+        List<PoliceTelemetry> result = new ArrayList<>(deviceIds.size());
+        if (rawValues != null) {
+            for (Object raw : rawValues) {
+                PoliceTelemetry t = toTelemetry(raw);
+                if (t != null) {
+                    result.add(t);
                 }
             }
         }
-        return telemetryList;
+        return result;
     }
 
     @CircuitBreaker(name = "redisWriteOps", fallbackMethod = "storeTelemetryFallback")
@@ -76,27 +99,22 @@ public class TelemetrySnapshotService {
     }
 
     @CircuitBreaker(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
-    @Retry(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
     @Bulkhead(name = "redisWriteOps", fallbackMethod = "storeTelemetryIfNewerFallback")
     public SnapshotStoreResult storeTelemetryIfNewer(PoliceTelemetry telemetry) {
-        return Observation.createNotStarted("event.redis.store_if_newer", observationRegistry)
-                .lowCardinalityKeyValue("redis.operation", "store_if_newer")
-                .observe(() -> {
-                    String snapshotKey = REDIS_KEY_PREFIX + telemetry.getDeviceId();
-                    PoliceTelemetry current = toTelemetry(redisTemplate.opsForValue().get(snapshotKey));
-                    Instant currentTimestamp = current == null ? null : current.getTimestamp();
-                    Instant incomingTimestamp = telemetry.getTimestamp();
+        String snapshotKey = REDIS_KEY_PREFIX + telemetry.getDeviceId();
+        PoliceTelemetry current = toTelemetry(redisTemplate.opsForValue().get(snapshotKey));
+        Instant currentTimestamp = current == null ? null : current.getTimestamp();
+        Instant incomingTimestamp = telemetry.getTimestamp();
 
-                    StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
-                    if (staleReason != null) {
-                        meterRegistry.counter("event.snapshot.stale.skipped", "reason", staleReason.metricTag).increment();
-                        return new SnapshotStoreResult(false, currentTimestamp);
-                    }
+        StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
+        if (staleReason != null) {
+            staleCounters.get(staleReason).increment();
+            return new SnapshotStoreResult(false, currentTimestamp);
+        }
 
-                    redisTemplate.opsForValue().set(snapshotKey, telemetry);
-                    redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
-                    return new SnapshotStoreResult(true, currentTimestamp);
-                });
+        redisTemplate.opsForValue().set(snapshotKey, telemetry);
+        redisTemplate.opsForSet().add(REDIS_DEVICE_INDEX_KEY, telemetry.getDeviceId());
+        return new SnapshotStoreResult(true, currentTimestamp);
     }
 
     public PoliceTelemetry getDeviceTelemetryFallback(String deviceId, Throwable throwable) {
@@ -112,8 +130,12 @@ public class TelemetrySnapshotService {
 
     public SnapshotStoreResult storeTelemetryIfNewerFallback(PoliceTelemetry telemetry, Throwable throwable) {
         incrementFailure("store_if_newer", throwable);
-        log.error("Unable to store telemetry snapshot with ordering check for {}", telemetry.getDeviceId(), throwable);
-        throw new RuntimeException("Ordered telemetry snapshot write failed", throwable);
+        log.error("Redis unavailable — dropping snapshot write for device {} (circuit open or bulkhead full): {}",
+                telemetry.getDeviceId(), throwable.getMessage());
+        // Return a non-updated result instead of re-throwing so the Kafka consumer commits the
+        // offset and moves on. Re-throwing here causes DefaultErrorHandler to retry the message,
+        // which multiplies load exactly when Redis is already under pressure.
+        return new SnapshotStoreResult(false, null);
     }
 
     public List<PoliceTelemetry> getAllTelemetryFallback(Throwable throwable) {

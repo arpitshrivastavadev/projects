@@ -6,11 +6,20 @@ spring:
   kafka:
     consumer:
       group-id: police-event-group
-      auto-offset-reset: earliest
+      auto-offset-reset: latest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       enable-auto-commit: false
       observation-enabled: true
+      # Limit records returned per poll per partition-thread to bound processing latency.
+      # 500 msg/s ÷ 5 threads = 100 msg/s per thread; 25 records/poll at ~2ms each = ~50ms/poll cycle.
+      max-poll-records: ${KAFKA_MAX_POLL_RECORDS:25}
+      # Prevent one slow partition from stalling the fetch for others
+      properties:
+        fetch.min.bytes: 16384              # wait for 16 KB before returning an empty poll
+        fetch.max.wait.ms: 500
+        max.partition.fetch.bytes: 131072   # 128 KB per partition (default is 1 MB × 50 = 50 MB buffer)
+        max.poll.interval.ms: 300000        # 5 min — explicit; keep above worst-case retry sleep
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -31,7 +40,9 @@ server:
 management:
   tracing:
     sampling:
-      probability: 1.0
+      # 100% sampling at 500 msg/s = ~500 spans/s of OTEL overhead. 10% is sufficient for
+      # latency profiling while reducing serialization/export CPU by ~90%.
+      probability: ${OTEL_TRACE_SAMPLING_PROBABILITY:0.1}
     propagation:
       type: w3c
   otlp:
@@ -123,12 +134,19 @@ resilience4j:
 police:
   event:
     idempotency:
-      ttl: ${POLICE_EVENT_IDEMPOTENCY_TTL:PT1H}   # Reduced from 24h — 3M keys/day → 125K keys max
+      # 10-min TTL covers Kafka at-least-once retry window (seconds); shorter than 1h prevents key flood.
+      # At 200 msg/s × 600s = 120K keys max ≈ 20 MB — safe for a 512m Redis limit.
+      ttl: ${POLICE_EVENT_IDEMPOTENCY_TTL:PT10M}
   kafka:
     topics:
       telemetry: police-telemetry
       telemetry-retry: police-telemetry-retry
       telemetry-dlq: police-telemetry-dlq
+    consumer:
+      # Tune via env vars without rebuild. Must not exceed partition count (50).
+      # Rule of thumb: cores × 1.5, capped at 10 on memory-constrained hosts (each thread ~50 MB).
+      concurrency: ${KAFKA_CONSUMER_CONCURRENCY:5}
+      retry-concurrency: ${KAFKA_RETRY_CONSUMER_CONCURRENCY:2}
     retry:
       main:
         attempts: 2

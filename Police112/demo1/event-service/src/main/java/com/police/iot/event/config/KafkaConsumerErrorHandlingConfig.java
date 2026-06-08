@@ -45,16 +45,27 @@ public class KafkaConsumerErrorHandlingConfig {
     @Value("${police.kafka.retry.retry-topic.attempts:2}")
     private long retryTopicAttempts;
 
+    // Concurrency = number of consumer threads (and thus Kafka consumer instances).
+    // Keep at or below the partition count (50). On a memory-constrained host, 5–10 is
+    // a reasonable ceiling; each thread holds its own fetch buffer (~1 MB default).
+    @Value("${police.kafka.consumer.concurrency:5}")
+    private int consumerConcurrency;
+
+    // Retry topic gets fewer threads — it should be low-volume; giving it the same
+    // concurrency as the main topic would compete for the same CPU budget.
+    @Value("${police.kafka.consumer.retry-concurrency:2}")
+    private int retryConsumerConcurrency;
+
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String> telemetryMainKafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, String> factory = baseFactory();
+        ConcurrentKafkaListenerContainerFactory<String, String> factory = baseFactory(consumerConcurrency);
         factory.setCommonErrorHandler(mainTopicErrorHandler());
         return factory;
     }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, String> telemetryRetryKafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, String> factory = baseFactory();
+        ConcurrentKafkaListenerContainerFactory<String, String> factory = baseFactory(retryConsumerConcurrency);
         factory.setCommonErrorHandler(retryTopicErrorHandler());
         return factory;
     }
@@ -97,9 +108,11 @@ public class KafkaConsumerErrorHandlingConfig {
         return errorHandler;
     }
 
-    private ConcurrentKafkaListenerContainerFactory<String, String> baseFactory() {
+    private ConcurrentKafkaListenerContainerFactory<String, String> baseFactory(int concurrency) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
+        factory.setConcurrency(concurrency);
+        factory.setBatchListener(true);
         factory.getContainerProperties().setObservationEnabled(true);
         return factory;
     }

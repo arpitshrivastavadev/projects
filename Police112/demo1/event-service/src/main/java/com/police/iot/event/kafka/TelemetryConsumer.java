@@ -10,9 +10,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.kafka.listener.BatchListenerFailedException;
 import org.springframework.stereotype.Service;
+
+import io.micrometer.core.instrument.Counter;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Slf4j
@@ -26,14 +29,26 @@ public class TelemetryConsumer {
     private final TelemetryEventIdempotencyService idempotencyService;
     private final MeterRegistry meterRegistry;
 
+    // Lazy counter caches keyed by topic; settle after the first message per topic.
+    // final + initializer → excluded from @RequiredArgsConstructor, so Spring injection is unaffected.
+    private final ConcurrentHashMap<String, Counter> successCounters    = new ConcurrentHashMap<>(4);
+    private final ConcurrentHashMap<String, Counter> failureCounters    = new ConcurrentHashMap<>(4);
+    private final ConcurrentHashMap<String, Counter> dupSkippedCounters = new ConcurrentHashMap<>(4);
+
     @KafkaListener(
             topics = "${police.kafka.topics.telemetry:police-telemetry}",
             groupId = "${spring.kafka.consumer.group-id:police-event-group}",
             containerFactory = "telemetryMainKafkaListenerContainerFactory"
     )
-    public void consumeMain(ConsumerRecord<String, String> record,
-                            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        processRecord(record, topic);
+    public void consumeMain(List<ConsumerRecord<String, String>> records) {
+        for (int i = 0; i < records.size(); i++) {
+            try {
+                ConsumerRecord<String, String> record = records.get(i);
+                processRecord(record, record.topic());
+            } catch (Exception e) {
+                throw new BatchListenerFailedException("Failed to process record", e, i);
+            }
+        }
     }
 
     @KafkaListener(
@@ -41,9 +56,15 @@ public class TelemetryConsumer {
             groupId = "${spring.kafka.consumer.group-id:police-event-group}",
             containerFactory = "telemetryRetryKafkaListenerContainerFactory"
     )
-    public void consumeRetry(ConsumerRecord<String, String> record,
-                             @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        processRecord(record, topic);
+    public void consumeRetry(List<ConsumerRecord<String, String>> records) {
+        for (int i = 0; i < records.size(); i++) {
+            try {
+                ConsumerRecord<String, String> record = records.get(i);
+                processRecord(record, record.topic());
+            } catch (Exception e) {
+                throw new BatchListenerFailedException("Failed to process record", e, i);
+            }
+        }
     }
 
     private void processRecord(ConsumerRecord<String, String> record, String topic) {
@@ -56,7 +77,7 @@ public class TelemetryConsumer {
             idempotencyKey = idempotencyService.buildIdempotencyKey(telemetry);
 
             if (!idempotencyService.claim(idempotencyKey)) {
-                meterRegistry.counter("event.kafka.consume.duplicates.skipped", "topic", topic).increment();
+                dupSkippedCounters.computeIfAbsent(topic, t -> meterRegistry.counter("event.kafka.consume.duplicates.skipped", "topic", t)).increment();
                 log.info("Skipping duplicate telemetry event. deviceId={} tenantId={} idempotencyKey={} correlationId={}",
                         telemetry.getDeviceId(), telemetry.getTenantId(), idempotencyKey, correlationId);
                 return;
@@ -68,7 +89,7 @@ public class TelemetryConsumer {
             try {
                 SnapshotStoreResult storeResult = telemetrySnapshotService.storeTelemetryIfNewer(telemetry);
                 if (storeResult.updated()) {
-                    meterRegistry.counter("event.kafka.consume.success", "topic", topic).increment();
+                    successCounters.computeIfAbsent(topic, t -> meterRegistry.counter("event.kafka.consume.success", "topic", t)).increment();
                 } else {
                     log.info("Skipping stale telemetry update. deviceId={} tenantId={} incomingTimestamp={} currentTimestamp={} correlationId={}",
                             telemetry.getDeviceId(),
@@ -93,7 +114,7 @@ public class TelemetryConsumer {
             }
 
         } catch (Exception e) {
-            meterRegistry.counter("event.kafka.consume.failures", "topic", topic).increment();
+            failureCounters.computeIfAbsent(topic, t -> meterRegistry.counter("event.kafka.consume.failures", "topic", t)).increment();
             log.error("Failed to process telemetry message. topic={} partition={} offset={} correlationId={} idempotencyKey={} payload={}",
                     topic, record.partition(), record.offset(), correlationId, idempotencyKey, message, e);
             throw new RuntimeException("Telemetry processing failed", e);
