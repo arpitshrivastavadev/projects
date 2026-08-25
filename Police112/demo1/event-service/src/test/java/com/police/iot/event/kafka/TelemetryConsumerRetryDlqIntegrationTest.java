@@ -5,6 +5,7 @@ import com.police.iot.common.dto.PoliceTelemetry;
 import com.police.iot.event.EventServiceApplication;
 import com.police.iot.event.service.TelemetryEventIdempotencyService;
 import com.police.iot.event.service.TelemetrySnapshotService;
+import com.police.iot.event.service.TelemetrySnapshotService.SnapshotStoreResult;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -23,6 +24,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +38,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(
@@ -92,12 +95,12 @@ class TelemetryConsumerRetryDlqIntegrationTest {
                     throw new RuntimeException("temporary redis error");
                 }
             }
-            return null;
-        }).when(telemetrySnapshotService).storeTelemetry(any(PoliceTelemetry.class));
+            return new SnapshotStoreResult(true, null);
+        }).when(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
 
         sendTelemetry("transient-device", "corr-transient");
 
-        verify(telemetrySnapshotService, times(2)).storeTelemetry(any(PoliceTelemetry.class));
+        verify(telemetrySnapshotService, timeout(10_000).times(2)).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         assertEquals(2, attemptsByDevice.get("transient-device"));
     }
 
@@ -105,11 +108,11 @@ class TelemetryConsumerRetryDlqIntegrationTest {
     void poisonMessageIsRoutedToDlqAfterRetryExhaustion() throws Exception {
         when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("test-key");
         when(idempotencyService.claim("test-key")).thenReturn(true);
-        doThrow(new RuntimeException("always failing")).when(telemetrySnapshotService).storeTelemetry(any(PoliceTelemetry.class));
+        doThrow(new RuntimeException("always failing")).when(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
 
         sendTelemetry("poison-device", "corr-poison");
 
-        verify(telemetrySnapshotService, times(3)).storeTelemetry(any(PoliceTelemetry.class));
+        verify(telemetrySnapshotService, timeout(15_000).times(3)).storeTelemetryIfNewer(any(PoliceTelemetry.class));
 
         ConsumerRecord<String, String> dlqRecord = pollSingleRecord("police-telemetry-dlq", 10);
         assertNotNull(dlqRecord);
@@ -137,7 +140,7 @@ class TelemetryConsumerRetryDlqIntegrationTest {
         String payload = objectMapper.writeValueAsString(telemetry);
         Message<String> message = MessageBuilder.withPayload(payload)
                 .setHeader(KafkaHeaders.TOPIC, "police-telemetry")
-                .setHeader(KafkaHeaders.MESSAGE_KEY, deviceId)
+                .setHeader(KafkaHeaders.KEY, deviceId)
                 .setHeader("X-Correlation-ID", correlationId)
                 .build();
 
@@ -151,7 +154,7 @@ class TelemetryConsumerRetryDlqIntegrationTest {
 
         try (consumer) {
             embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, topic);
-            return KafkaTestUtils.getSingleRecord(consumer, topic, timeoutSeconds * 1_000L);
+            return KafkaTestUtils.getSingleRecord(consumer, topic, Duration.ofSeconds(timeoutSeconds));
         }
     }
 }

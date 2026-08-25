@@ -19,6 +19,10 @@ subprojects {
 
     sourceCompatibility = '17'
 
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
     dependencyManagement {
         imports {
             mavenBom "org.springframework.boot:spring-boot-starter-parent:3.2.0"

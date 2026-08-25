@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 import java.util.Optional;
 
@@ -32,7 +33,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**", "/livez", "/readyz").permitAll()
                         .requestMatchers("/api/v1/police/**").authenticated()
                         .anyRequest().authenticated())
-                .addFilterAfter(tenantFilter, BasicAuthenticationFilter.class);
+                .addFilterAfter(tenantFilter, AuthorizationFilter.class);
 
         devJwtAuthenticationFilter.ifPresent(filter -> http.addFilterBefore(filter, BasicAuthenticationFilter.class));
 

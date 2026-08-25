@@ -108,6 +108,9 @@ public class TelemetrySnapshotService {
 
         StaleReason staleReason = staleReason(incomingTimestamp, currentTimestamp);
         if (staleReason != null) {
+            if (staleCounters == null) {
+                initCounters();
+            }
             staleCounters.get(staleReason).increment();
             return new SnapshotStoreResult(false, currentTimestamp);
         }

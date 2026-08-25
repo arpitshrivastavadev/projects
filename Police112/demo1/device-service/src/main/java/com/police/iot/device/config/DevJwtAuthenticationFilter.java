@@ -28,6 +28,7 @@ import java.util.Map;
 public class DevJwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String TENANT_HEADER = "X-Tenant-Id";
 
     private final ObjectMapper objectMapper;
     private final String issuer;
@@ -51,6 +52,11 @@ public class DevJwtAuthenticationFilter extends OncePerRequestFilter {
 
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            String tenantId = request.getHeader(TENANT_HEADER);
+            if (tenantId != null && !tenantId.isBlank()) {
+                SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                        Map.of("tenant_id", tenantId), null, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+            }
             filterChain.doFilter(request, response);
             return;
         }

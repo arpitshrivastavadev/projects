@@ -7,7 +7,7 @@ COPY settings.gradle build.gradle ./
 COPY common common
 COPY device-service device-service
 
-RUN chmod +x gradlew && ./gradlew :device-service:bootJar --no-daemon
+RUN gradle :device-service:bootJar --no-daemon
 
 FROM eclipse-temurin:17-jre-jammy
 RUN groupadd -r police && useradd -r -g police police

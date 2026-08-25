@@ -4,6 +4,7 @@ import com.police.iot.common.model.Officer;
 import com.police.iot.common.security.AuthenticatedTenantResolver;
 import com.police.iot.common.security.TenantFilter;
 import com.police.iot.device.config.SecurityConfig;
+import com.police.iot.device.idempotency.IdempotencyAspect;
 import com.police.iot.device.controller.PoliceController;
 import com.police.iot.device.repository.IncidentRepository;
 import com.police.iot.device.repository.OfficerRepository;
@@ -11,9 +12,10 @@ import com.police.iot.device.repository.PatrolVehicleRepository;
 import com.police.iot.device.testutil.JwtTestTokenFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,9 +29,16 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = PoliceController.class)
-@Import({SecurityConfig.class, TenantFilter.class, AuthenticatedTenantResolver.class})
+@SpringBootTest
+@AutoConfigureMockMvc
 @TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:device-security;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driverClassName=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=none",
+        "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
+        "spring.flyway.enabled=true",
         "app.security.jwt.dev.enabled=true",
         "app.security.jwt.dev.issuer=test-device-service",
         "app.security.jwt.dev.secret=test-device-service-secret-1234567890"
@@ -50,6 +59,12 @@ class DeviceSecurityIntegrationTest {
 
     @MockBean
     private IncidentRepository incidentRepository;
+
+    @MockBean
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    @MockBean
+    private IdempotencyAspect idempotencyAspect;
 
     @Test
     void authenticatedRequestResolvesTenantFromPrincipalClaims() throws Exception {

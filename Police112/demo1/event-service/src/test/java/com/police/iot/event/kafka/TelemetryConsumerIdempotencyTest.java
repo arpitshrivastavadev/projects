@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,7 +46,7 @@ class TelemetryConsumerIdempotencyTest {
         when(telemetrySnapshotService.storeTelemetryIfNewer(any(PoliceTelemetry.class)))
                 .thenReturn(new SnapshotStoreResult(true, null));
 
-        consumer.consumeMain(record, "police-telemetry");
+        consumer.consumeMain(List.of(record));
 
         verify(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         verify(idempotencyService, never()).release(any());
@@ -60,7 +61,7 @@ class TelemetryConsumerIdempotencyTest {
         when(idempotencyService.buildIdempotencyKey(any(PoliceTelemetry.class))).thenReturn("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z");
         when(idempotencyService.claim("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z")).thenReturn(false);
 
-        consumer.consumeMain(record, "police-telemetry");
+        consumer.consumeMain(List.of(record));
 
         verify(telemetrySnapshotService, never()).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         verify(idempotencyService, never()).release(any());
@@ -76,7 +77,7 @@ class TelemetryConsumerIdempotencyTest {
         when(idempotencyService.claim("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z")).thenReturn(true);
         doThrow(new RuntimeException("redis write failure")).when(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
 
-        assertThrows(RuntimeException.class, () -> consumer.consumeMain(record, "police-telemetry"));
+        assertThrows(RuntimeException.class, () -> consumer.consumeMain(List.of(record)));
 
         verify(idempotencyService).release("event:idempotency:NYPD:device-1:ts:2026-04-21T10:15:30Z");
     }
@@ -92,7 +93,7 @@ class TelemetryConsumerIdempotencyTest {
         when(telemetrySnapshotService.storeTelemetryIfNewer(any(PoliceTelemetry.class)))
                 .thenReturn(new SnapshotStoreResult(false, Instant.parse("2026-04-21T10:16:30Z")));
 
-        consumer.consumeMain(record, "police-telemetry");
+        consumer.consumeMain(List.of(record));
 
         verify(telemetrySnapshotService).storeTelemetryIfNewer(any(PoliceTelemetry.class));
         verify(idempotencyService, never()).release(any());

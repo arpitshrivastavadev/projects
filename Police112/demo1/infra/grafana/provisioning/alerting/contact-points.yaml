@@ -7,7 +7,7 @@ contactPoints:
       - uid: slack-police112
         type: slack
         settings:
-          url: SLACK_WEBHOOK_URL_REDACTED
+          url: ${SLACK_WEBHOOK_URL}
           recipient: "#112-alerts"
           mentionChannel: ""
           token: ""

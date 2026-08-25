@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "app.security.jwt.dev.enabled=true",
         "app.security.jwt.dev.issuer=test-command-service",
         "app.security.jwt.dev.secret=test-command-service-secret-1234567890",
-        "spring.datasource.url=jdbc:h2:mem:commanddb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
+        "spring.datasource.url=jdbc:h2:mem:commanddb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
         "spring.datasource.driverClassName=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
@@ -56,7 +56,7 @@ class CommandServiceIntegrationTest {
                                 {
                                   "targetDeviceId":"vehicle-101",
                                   "commandType":"SIREN_ON",
-                                  "payload":"{\\"duration\\":10}"
+                                  "payload":"{\\\"duration\\\":10}"
                                 }
                                 """))
                 .andExpect(status().isCreated())
@@ -142,7 +142,7 @@ class CommandServiceIntegrationTest {
                                 {
                                   "targetDeviceId":"vehicle-222",
                                   "commandType":"LOCK_DOORS",
-                                  "payload":"{\\"priority\\":\"high\"}"
+                                  "payload":"{\\\"priority\\\":\\\"high\\\"}"
                                 }
                                 """))
                 .andExpect(status().isCreated())

@@ -123,13 +123,59 @@
             REFRESH_INTERVAL: 5000 // 5 seconds
         };
 
+        // The direct device-service dashboard is intended for the local dev profile.
+        // Production must obtain bearer tokens from an identity provider instead.
+        const DevDashboardAuth = {
+            issuer: 'police-iot-device-local',
+            secret: 'local-device-service-jwt-signing-secret-32b',
+
+            base64Url(bytes) {
+                let binary = '';
+                for (const byte of bytes) binary += String.fromCharCode(byte);
+                return btoa(binary).replace(/=/g, '').replace(/[+]/g, '-').replace(/[/]/g, '_');
+            },
+
+            async token(tenantId) {
+                if (!window.crypto?.subtle) {
+                    return null;
+                }
+
+                const encoder = new TextEncoder();
+                const now = Math.floor(Date.now() / 1000);
+                const header = this.base64Url(encoder.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+                const payload = this.base64Url(encoder.encode(JSON.stringify({
+                    iss: this.issuer,
+                    sub: 'local-dashboard',
+                    tenant_id: tenantId,
+                    scope: 'police.read police.write',
+                    iat: now,
+                    exp: now + 3600
+                })));
+                const signingInput = header + '.' + payload;
+                const key = await crypto.subtle.importKey(
+                    'raw', encoder.encode(this.secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+                );
+                const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(signingInput));
+                return signingInput + '.' + this.base64Url(new Uint8Array(signature));
+            },
+
+            async headers(tenantId) {
+                const headers = { 'X-Tenant-Id': tenantId };
+                const token = await this.token(tenantId);
+                if (token) {
+                    headers.Authorization = 'Bearer ' + token;
+                }
+                return headers;
+            }
+        };
+
         // ============================================
         // API SERVICE LAYER
         // ============================================
         class DeviceService {
             static async getOfficers(tenantId) {
                 const response = await fetch(`${API_CONFIG.DEVICE_SERVICE}/api/v1/police/officers`, {
-                    headers: { 'X-Tenant-Id': tenantId }
+                    headers: await DevDashboardAuth.headers(tenantId)
                 });
                 if (!response.ok) throw new Error('Failed to fetch officers');
                 return response.json();
@@ -140,7 +186,8 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Tenant-Id': tenantId
+                        'Idempotency-Key': (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function' ? globalThis.crypto.randomUUID() : 'idem-' + Date.now() + '-' + Math.random().toString(16).slice(2)),
+                        ...await DevDashboardAuth.headers(tenantId)
                     },
                     body: JSON.stringify(officer)
                 });
@@ -150,7 +197,7 @@
 
             static async getVehicles(tenantId) {
                 const response = await fetch(`${API_CONFIG.DEVICE_SERVICE}/api/v1/police/vehicles`, {
-                    headers: { 'X-Tenant-Id': tenantId }
+                    headers: await DevDashboardAuth.headers(tenantId)
                 });
                 if (!response.ok) throw new Error('Failed to fetch vehicles');
                 return response.json();
@@ -158,7 +205,7 @@
 
             static async getIncidents(tenantId) {
                 const response = await fetch(`${API_CONFIG.DEVICE_SERVICE}/api/v1/police/incidents`, {
-                    headers: { 'X-Tenant-Id': tenantId }
+                    headers: await DevDashboardAuth.headers(tenantId)
                 });
                 if (!response.ok) throw new Error('Failed to fetch incidents');
                 return response.json();

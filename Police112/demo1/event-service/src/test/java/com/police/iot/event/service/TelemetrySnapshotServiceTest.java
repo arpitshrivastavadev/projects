@@ -75,8 +75,7 @@ class TelemetrySnapshotServiceTest {
         when(redisTemplate.opsForSet()).thenReturn(setOperations);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(setOperations.members("twin:snapshot:devices")).thenReturn(Set.of("device-1", "device-2"));
-        when(valueOperations.get("twin:snapshot:device-1")).thenReturn(telemetry);
-        when(valueOperations.get("twin:snapshot:device-2")).thenReturn(null);
+        when(valueOperations.multiGet(org.mockito.ArgumentMatchers.anyList())).thenReturn(java.util.Arrays.asList(telemetry, null));
 
         List<PoliceTelemetry> result = service.getAllTelemetry();
 
@@ -160,7 +159,7 @@ class TelemetrySnapshotServiceTest {
 
         assertFalse(result.updated());
         assertEquals(Instant.parse("2026-04-21T10:16:30Z"), result.existingTimestamp());
-        assertEquals(1.0, meterRegistry.get("event.snapshot.stale.skipped").counter().count());
+        assertEquals(1.0, meterRegistry.get("event.snapshot.stale.skipped").tag("reason", "older").counter().count());
     }
 
     @Test
